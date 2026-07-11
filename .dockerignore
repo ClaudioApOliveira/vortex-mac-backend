@@ -19,4 +19,4 @@ src/test/
 
 # Demais artefatos de build — manter apenas o runner nativo
 target/*
-!target/mec-backend-1.0.0-SNAPSHOT-runner
+!target/*-runner

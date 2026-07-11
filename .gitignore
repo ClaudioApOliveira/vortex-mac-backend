@@ -39,6 +39,14 @@ nb-configuration.xml
 # Local environment
 .env
 
+# Infra local / banco em esteira separada
+Dockerfile
+Dockerfile.native
+docker-compose.yml
+docker/
+scripts/aplicar-migrations.sh
+scripts/importar-municipios.sh
+
 # JWT private key (nunca commitar — gere com scripts/gerar-chaves-jwt.sh)
 src/main/resources/keys/privateKey.pem
 

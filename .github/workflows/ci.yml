@@ -94,7 +94,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker build -f Dockerfile.native -t "${CI_IMAGE}" .
+          docker build -f src/main/docker/Dockerfile.native-micro -t "${CI_IMAGE}" .
 
       - name: Scan da imagem Docker (Trivy)
         uses: aquasecurity/trivy-action@0.28.0

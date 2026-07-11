@@ -47,27 +47,35 @@ jobs:
 
           MEM_AVAILABLE_MB=$(awk '/MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
           SWAP_FREE_MB=$(free -m | awk '/^Swap:/ {print ($2 > 0) ? $4 : 0}')
-          CPU_THREADS=$(nproc)
+          CPU_COUNT=$(nproc)
 
           USABLE_MB=$((MEM_AVAILABLE_MB + SWAP_FREE_MB))
           MAVEN_MB=512
-          OS_BUFFER_MB=256
+          OS_BUFFER_MB=1024
           NATIVE_MB=$((USABLE_MB - MAVEN_MB - OS_BUFFER_MB))
+          NATIVE_GB=$((NATIVE_MB / 1024))
 
-          if [ "$NATIVE_MB" -lt 1024 ]; then
-            echo "Erro: memória insuficiente para build nativo (disponível: ${USABLE_MB}MB, mínimo: ~1792MB)."
+          if [ "$NATIVE_GB" -lt 6 ]; then
+            echo "Erro: memória insuficiente para build nativo (disponível: ${USABLE_MB}MB, mínimo: ~7GB)."
             free -h
             exit 1
           fi
 
-          export MAVEN_OPTS="-Xmx${MAVEN_MB}m"
+          if [ "$CPU_COUNT" -gt 8 ]; then
+            BUILD_THREADS=8
+          else
+            BUILD_THREADS=$CPU_COUNT
+          fi
 
-          echo "Memória: ${USABLE_MB}MB utilizável → native-image ${NATIVE_MB}MB, ${CPU_THREADS} threads"
+          export MAVEN_OPTS="-Xmx${MAVEN_MB}m"
+          export QUARKUS_NATIVE_NATIVE_IMAGE_XMX="${NATIVE_GB}g"
+
+          echo "Memória: ${USABLE_MB}MB utilizável → native-image ${NATIVE_GB}g, ${BUILD_THREADS} threads"
           free -h
 
           ./mvnw package -Dnative -DskipTests --batch-mode \
-            -Dquarkus.native.native-image-xmx="${NATIVE_MB}m" \
-            -Dquarkus.native.additional-build-args=-H:NumberOfThreads="${CPU_THREADS}"
+            -Dquarkus.native.native-image-xmx="${NATIVE_GB}g" \
+            -Dquarkus.native.additional-build-args="-J-Xmx${NATIVE_GB}g,-H:NumberOfThreads=${BUILD_THREADS}"
 
           BINARY="target/mec-backend-1.0.0-SNAPSHOT-runner"
           test -f "$BINARY"

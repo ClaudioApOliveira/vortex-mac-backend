@@ -306,12 +306,14 @@ Chaves JWT são geradas no CI via `scripts/gerar-chaves-jwt.sh`.
 
 ### Secrets no GitHub
 
-Em **Settings → Secrets and variables → Actions**, configure:
+Crie o environment **`DOCKERHUB`** em **Settings → Environments** e adicione os secrets:
 
 | Secret | Descrição |
 |--------|-----------|
 | `DOCKERHUB_USERNAME` | Usuário Docker Hub (`oliveiraclaudio`) |
 | `DOCKERHUB_TOKEN` | Access Token do Docker Hub (não use a senha da conta) |
+
+O job do workflow referencia `environment: DOCKERHUB` para acessar esses secrets.
 
 Crie o token em [Docker Hub → Account Settings → Security → Access Tokens](https://hub.docker.com/settings/security).
 

@@ -16,6 +16,7 @@ jobs:
   test-and-native-build:
     name: Testes e build nativo
     runs-on: self-hosted
+    environment: DOCKERHUB
 
     env:
       MAVEN_OPTS: -Xmx4g

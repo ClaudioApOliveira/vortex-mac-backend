@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-native-build:
+    name: Testes e build nativo
+    runs-on: self-hosted
+
+    env:
+      MAVEN_OPTS: -Xmx4g
+      QUARKUS_PROFILE: prod
+      CI_IMAGE: mec-backend:ci-${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar GraalVM 25 e native-image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "JAVA_HOME=${JAVA_HOME:-<não definido>}"
+          java -version
+
+          if ! java -version 2>&1 | grep -E '"25(\.|")' >/dev/null; then
+            echo "Erro: o runner self-hosted deve usar JDK/GraalVM 25."
+            exit 1
+          fi
+
+          if ! command -v native-image >/dev/null 2>&1; then
+            echo "Erro: native-image não encontrado no PATH."
+            echo "Instale o componente nativo do GraalVM, por exemplo:"
+            echo "  gu install native-image"
+            exit 1
+          fi
+
+          native-image --version
+
+      - name: Gerar chaves JWT para o build
+        shell: bash
+        run: |
+          chmod +x ./scripts/gerar-chaves-jwt.sh
+          ./scripts/gerar-chaves-jwt.sh
+
+      - name: Testes unitários
+        shell: bash
+        run: ./mvnw test -DskipITs --batch-mode
+
+      - name: Scan de dependências (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          format: table
+
+      - name: Build nativo (GraalVM)
+        shell: bash
+        run: ./mvnw package -Dnative -DskipTests --batch-mode
+
+      - name: Validar binário nativo
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BINARY="target/mec-backend-1.0.0-SNAPSHOT-runner"
+
+          if [ ! -f "$BINARY" ]; then
+            echo "Erro: binário nativo não encontrado em $BINARY"
+            ls -la target/ || true
+            exit 1
+          fi
+
+          chmod +x "$BINARY"
+          file "$BINARY"
+          ls -lh "$BINARY"
+
+      - name: Verificar Docker
+        shell: bash
+        run: docker version
+
+      - name: Build imagem Docker nativa
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -f Dockerfile.native -t "${CI_IMAGE}" .
+
+      - name: Scan da imagem Docker (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.CI_IMAGE }}
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          format: table
+
+      - name: Publicar artefato nativo
+        uses: actions/upload-artifact@v4
+        with:
+          name: mec-backend-native-${{ github.sha }}
+          path: target/mec-backend-1.0.0-SNAPSHOT-runner
+          if-no-files-found: error
+          retention-days: 7

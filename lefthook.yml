@@ -1,0 +1,17 @@
+# Instalação:
+#   brew install lefthook   # ou: curl -sSfL https://lefthook.dev/install.sh | sh
+#   lefthook install
+#
+# Cobertura JaCoCo: mínimo atual 14% (pom.xml). Meta: 80%.
+
+pre-commit:
+  parallel: true
+  commands:
+    spotless:
+      glob: "**/*.java"
+      run: ./mvnw -q spotless:apply
+
+pre-push:
+  commands:
+    quality-gate:
+      run: ./scripts/quality-gate.sh

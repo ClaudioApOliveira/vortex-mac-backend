@@ -1,0 +1,22 @@
+# Git / IDE
+.git
+.github
+.idea
+.vscode
+
+# Maven cache local
+.mvn/wrapper/maven-wrapper.jar
+
+# Local env e docs
+.env
+docs/
+
+# Dados locais do Postgres
+docker/
+
+# Testes (não necessários na imagem nativa)
+src/test/
+
+# Demais artefatos de build — manter apenas o runner nativo
+target/*
+!target/mec-backend-1.0.0-SNAPSHOT-runner

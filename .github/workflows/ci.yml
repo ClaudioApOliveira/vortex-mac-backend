@@ -40,15 +40,24 @@ jobs:
           ./scripts/gerar-chaves-jwt.sh
           ./mvnw test -DskipITs --batch-mode
 
-      - name: Instalar dependências do build nativo (Ubuntu)
+      - name: Verificar dependências do build nativo (Ubuntu)
         shell: bash
         run: |
           set -euo pipefail
+
           if dpkg -s zlib1g-dev >/dev/null 2>&1; then
             echo "zlib1g-dev já instalado."
-          else
+          elif [ "$(id -u)" -eq 0 ]; then
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends zlib1g-dev
+          elif sudo -n true 2>/dev/null; then
             sudo apt-get update
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends zlib1g-dev
+          else
+            echo "Erro: zlib1g-dev não está instalado e o runner não tem sudo sem senha."
+            echo "Instale uma vez no servidor Ubuntu do runner:"
+            echo "  sudo apt-get update && sudo apt-get install -y zlib1g-dev"
+            exit 1
           fi
 
       - name: Build nativo

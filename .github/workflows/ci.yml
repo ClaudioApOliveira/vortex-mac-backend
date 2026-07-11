@@ -72,12 +72,11 @@ jobs:
 
           # Argumentos do GraalVM native-image:
           #   -J-Xmx / -H:NumberOfThreads  -> recursos de build (ajustados ao runner)
-          #   --gc=G1                      -> GC de servidor: melhor throughput/latência em runtime
           #   -O3                          -> nível máximo de otimização do binário
           #   -march=x86-64-v3             -> instruções modernas (AVX2); binário portável em CPUs 2015+
+          # GC: GraalVM Community só suporta serial/epsilon; serial é o padrão para apps de servidor.
           NATIVE_ARGS="-J-Xmx${NATIVE_GB}g"
           NATIVE_ARGS="${NATIVE_ARGS},-H:NumberOfThreads=${BUILD_THREADS}"
-          NATIVE_ARGS="${NATIVE_ARGS},--gc=G1"
           NATIVE_ARGS="${NATIVE_ARGS},-O3"
           NATIVE_ARGS="${NATIVE_ARGS},-march=x86-64-v3"
 

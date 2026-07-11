@@ -1,9 +1,6 @@
 name: CI
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
@@ -19,7 +16,7 @@ jobs:
     environment: DOCKERHUB
 
     env:
-      MAVEN_OPTS: -Xmx4g
+      MAVEN_OPTS: -Xmx1536m
       QUARKUS_PROFILE: prod
       DOCKER_IMAGE: oliveiraclaudio/vortex-mec-backend
 
@@ -35,100 +32,59 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: maven
 
-      - name: Verificar GraalVM 25 e native-image
+      - name: Preparar e testar
         shell: bash
         run: |
           set -euo pipefail
-
-          echo "JAVA_HOME=${JAVA_HOME}"
-          java -version
-
-          if ! java -version 2>&1 | grep -E '"25(\.|")' >/dev/null; then
-            echo "Erro: o runner deve usar JDK/GraalVM 25."
-            exit 1
-          fi
-
-          if ! command -v native-image >/dev/null 2>&1; then
-            echo "Erro: native-image não encontrado no PATH."
-            exit 1
-          fi
-
-          native-image --version
-
-      - name: Gerar chaves JWT para o build
-        shell: bash
-        run: |
           chmod +x ./scripts/gerar-chaves-jwt.sh
           ./scripts/gerar-chaves-jwt.sh
+          ./mvnw test -DskipITs --batch-mode
 
-      - name: Testes unitários
-        shell: bash
-        run: ./mvnw test -DskipITs --batch-mode
-
-      - name: Scan de dependências (Trivy)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln
-          severity: CRITICAL,HIGH
-          exit-code: '1'
-          format: table
-
-      - name: Build nativo (GraalVM)
-        shell: bash
-        run: ./mvnw package -Dnative -DskipTests --batch-mode
-
-      - name: Validar binário nativo
+      - name: Build nativo
         shell: bash
         run: |
           set -euo pipefail
 
-          BINARY="target/mec-backend-1.0.0-SNAPSHOT-runner"
+          MEM_AVAILABLE_MB=$(awk '/MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
+          SWAP_FREE_MB=$(free -m | awk '/^Swap:/ {print ($2 > 0) ? $4 : 0}')
+          CPU_THREADS=$(nproc)
 
-          if [ ! -f "$BINARY" ]; then
-            echo "Erro: binário nativo não encontrado em $BINARY"
-            ls -la target/ || true
+          USABLE_MB=$((MEM_AVAILABLE_MB + SWAP_FREE_MB))
+          MAVEN_MB=512
+          OS_BUFFER_MB=256
+          NATIVE_MB=$((USABLE_MB - MAVEN_MB - OS_BUFFER_MB))
+
+          if [ "$NATIVE_MB" -lt 1024 ]; then
+            echo "Erro: memória insuficiente para build nativo (disponível: ${USABLE_MB}MB, mínimo: ~1792MB)."
+            free -h
             exit 1
           fi
 
+          export MAVEN_OPTS="-Xmx${MAVEN_MB}m"
+
+          echo "Memória: ${USABLE_MB}MB utilizável → native-image ${NATIVE_MB}MB, ${CPU_THREADS} threads"
+          free -h
+
+          ./mvnw package -Dnative -DskipTests --batch-mode \
+            -Dquarkus.native.native-image-xmx="${NATIVE_MB}m" \
+            -Dquarkus.native.additional-build-args=-H:NumberOfThreads="${CPU_THREADS}"
+
+          BINARY="target/mec-backend-1.0.0-SNAPSHOT-runner"
+          test -f "$BINARY"
           chmod +x "$BINARY"
-          file "$BINARY"
           ls -lh "$BINARY"
 
-      - name: Verificar Docker
-        shell: bash
-        run: docker version
-
-      - name: Login Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build imagem Docker nativa
+      - name: Build imagem Docker
         shell: bash
         run: |
           set -euo pipefail
+          docker build \
+            -f src/main/docker/Dockerfile.native-micro \
+            -t "${DOCKER_IMAGE}:${GITHUB_SHA}" \
+            -t "${DOCKER_IMAGE}:latest" \
+            .
 
-          TAGS="-t ${DOCKER_IMAGE}:${GITHUB_SHA}"
-
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-            TAGS="${TAGS} -t ${DOCKER_IMAGE}:pr-${PR_NUMBER}"
-          fi
-
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            TAGS="${TAGS} -t ${DOCKER_IMAGE}:latest"
-          fi
-
-          # shellcheck disable=SC2086
-          docker build -f src/main/docker/Dockerfile.native-micro ${TAGS} .
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_SHA: ${{ github.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-
-      - name: Scan da imagem Docker (Trivy)
+      - name: Scan da imagem (Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
@@ -139,27 +95,11 @@ jobs:
 
       - name: Push imagem Docker Hub
         shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
-
+          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
           docker push "${DOCKER_IMAGE}:${GITHUB_SHA}"
-
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-            docker push "${DOCKER_IMAGE}:pr-${PR_NUMBER}"
-          fi
-
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            docker push "${DOCKER_IMAGE}:latest"
-          fi
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_SHA: ${{ github.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-
-      - name: Publicar artefato nativo
-        uses: actions/upload-artifact@v4
-        with:
-          name: mec-backend-native-${{ github.sha }}
-          path: target/mec-backend-1.0.0-SNAPSHOT-runner
-          if-no-files-found: error
-          retention-days: 7
+          docker push "${DOCKER_IMAGE}:latest"

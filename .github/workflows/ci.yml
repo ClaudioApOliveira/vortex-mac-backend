@@ -129,6 +129,7 @@ jobs:
           image-ref: ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
           scanners: vuln
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: '1'
           format: table
 

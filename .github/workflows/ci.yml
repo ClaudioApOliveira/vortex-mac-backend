@@ -27,23 +27,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Configurar GraalVM 25
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: graalvm-community
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: maven
+
       - name: Verificar GraalVM 25 e native-image
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "JAVA_HOME=${JAVA_HOME:-<não definido>}"
+          echo "JAVA_HOME=${JAVA_HOME}"
           java -version
 
           if ! java -version 2>&1 | grep -E '"25(\.|")' >/dev/null; then
-            echo "Erro: o runner self-hosted deve usar JDK/GraalVM 25."
+            echo "Erro: o runner deve usar JDK/GraalVM 25."
             exit 1
           fi
 
           if ! command -v native-image >/dev/null 2>&1; then
             echo "Erro: native-image não encontrado no PATH."
-            echo "Instale o componente nativo do GraalVM, por exemplo:"
-            echo "  gu install native-image"
             exit 1
           fi
 

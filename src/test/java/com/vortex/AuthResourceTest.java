@@ -390,6 +390,27 @@ class AuthResourceTest {
   }
 
   @Test
+  void refreshComTokenReutilizadoRevogaSessoes() {
+    String refreshToken = AuthTestHelper.obterRefreshTokenAdmin();
+
+    given()
+        .contentType(ContentType.JSON)
+        .cookie("refresh_token", refreshToken)
+        .when()
+        .post("/api/auth/refresh")
+        .then()
+        .statusCode(200);
+
+    given()
+        .contentType(ContentType.JSON)
+        .cookie("refresh_token", refreshToken)
+        .when()
+        .post("/api/auth/refresh")
+        .then()
+        .statusCode(401);
+  }
+
+  @Test
   void alterarSenhaComSenhaAtualIncorretaRetorna401() {
     given()
         .auth()
@@ -404,6 +425,6 @@ class AuthResourceTest {
         .put("/api/auth/me/senha")
         .then()
         .statusCode(401)
-        .body("message", is("Senha atual incorreta"));
+        .body("message", is("Credenciais inválidas"));
   }
 }

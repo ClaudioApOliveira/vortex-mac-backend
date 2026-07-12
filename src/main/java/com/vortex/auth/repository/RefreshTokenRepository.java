@@ -9,7 +9,13 @@ public interface RefreshTokenRepository {
 
   Optional<RefreshToken> findValidoPorHash(String tokenHash);
 
+  Optional<RefreshToken> findValidoPorHashForUpdate(String tokenHash);
+
+  Optional<RefreshToken> findPorHash(String tokenHash);
+
   void revogarPorHash(String tokenHash);
 
   void revogarPorUsuarioId(Long usuarioId);
+
+  int removerExpiradosERevogados();
 }

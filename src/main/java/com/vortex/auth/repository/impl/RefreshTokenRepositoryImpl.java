@@ -32,6 +32,25 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
   }
 
   @Override
+  public Optional<RefreshToken> findValidoPorHashForUpdate(String tokenHash) {
+    return entityManager
+        .createNativeQuery(
+            RefreshTokenQuery.BUSCAR_VALIDO_POR_HASH_FOR_UPDATE.getSql(), RefreshToken.class)
+        .setParameter("tokenHash", tokenHash)
+        .getResultStream()
+        .findFirst();
+  }
+
+  @Override
+  public Optional<RefreshToken> findPorHash(String tokenHash) {
+    return entityManager
+        .createNativeQuery(RefreshTokenQuery.BUSCAR_POR_HASH.getSql(), RefreshToken.class)
+        .setParameter("tokenHash", tokenHash)
+        .getResultStream()
+        .findFirst();
+  }
+
+  @Override
   public void revogarPorHash(String tokenHash) {
     entityManager
         .createNativeQuery(RefreshTokenQuery.REVOGAR_POR_HASH.getSql())
@@ -44,6 +63,13 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
     entityManager
         .createNativeQuery(RefreshTokenQuery.REVOGAR_POR_USUARIO_ID.getSql())
         .setParameter("usuarioId", usuarioId)
+        .executeUpdate();
+  }
+
+  @Override
+  public int removerExpiradosERevogados() {
+    return entityManager
+        .createNativeQuery(RefreshTokenQuery.REMOVER_EXPIRADOS_E_REVOGADOS.getSql())
         .executeUpdate();
   }
 }

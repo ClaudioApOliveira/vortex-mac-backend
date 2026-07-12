@@ -5,15 +5,12 @@ import com.vortex.auth.repository.RefreshTokenRepository;
 import com.vortex.auth.security.AuthMessages;
 import com.vortex.auth.security.RefreshTokenService;
 import com.vortex.auth.security.SessaoService;
+import com.vortex.auth.security.TokenHashUtil;
 import com.vortex.shared.exception.UnauthorizedException;
 import com.vortex.usuario.entity.Usuario;
-import com.vortex.usuario.repository.UsuarioRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
@@ -25,7 +22,6 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
   private final SecureRandom secureRandom = new SecureRandom();
 
   private final RefreshTokenRepository refreshTokenRepository;
-  private final UsuarioRepository usuarioRepository;
   private final SessaoService sessaoService;
 
   @ConfigProperty(name = "vortex.jwt.refresh-token.lifespan", defaultValue = "604800")
@@ -33,54 +29,47 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
   @Inject
   public RefreshTokenServiceImpl(
-      RefreshTokenRepository refreshTokenRepository,
-      UsuarioRepository usuarioRepository,
-      SessaoService sessaoService) {
+      RefreshTokenRepository refreshTokenRepository, SessaoService sessaoService) {
     this.refreshTokenRepository = refreshTokenRepository;
-    this.usuarioRepository = usuarioRepository;
     this.sessaoService = sessaoService;
   }
 
   @Override
   @Transactional
-  public String criar(Long usuarioId) {
-    Usuario usuario =
-        usuarioRepository
-            .findById(usuarioId)
-            .orElseThrow(() -> new UnauthorizedException("Usuário não encontrado"));
-
+  public String criar(Usuario usuario) {
     String tokenPlano = gerarTokenPlano();
     RefreshToken refreshToken = new RefreshToken();
-    refreshToken.setTokenHash(hashToken(tokenPlano));
+    refreshToken.setTokenHash(TokenHashUtil.hash(tokenPlano));
     refreshToken.setUsuario(usuario);
     refreshToken.setExpiraEm(LocalDateTime.now().plusSeconds(refreshTokenExpiraEmSegundos));
 
     refreshTokenRepository.save(refreshToken);
-    sessaoService.liberarRefreshPorUsuario(usuarioId);
-    sessaoService.registrarRefresh(tokenPlano, usuarioId, refreshTokenExpiraEmSegundos);
+    sessaoService.liberarRefreshPorUsuario(usuario.getId());
+    sessaoService.registrarRefresh(tokenPlano, usuario.getId(), refreshTokenExpiraEmSegundos);
     return tokenPlano;
   }
 
   @Override
   @Transactional
-  public void revogar(String refreshToken) {
-    refreshTokenRepository.revogarPorHash(hashToken(refreshToken));
-    sessaoService.revogarRefresh(refreshToken);
-  }
+  public RefreshToken validarERevogar(String refreshToken) {
+    if (refreshToken == null || refreshToken.isBlank()) {
+      throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
+    }
 
-  @Override
-  @Transactional
-  public void revogarTodosPorUsuario(Long usuarioId) {
-    refreshTokenRepository.revogarPorUsuarioId(usuarioId);
-    sessaoService.invalidarRefreshPorUsuario(usuarioId, refreshTokenExpiraEmSegundos);
-  }
+    String hash = TokenHashUtil.hash(refreshToken);
+    RefreshToken refreshTokenExistente =
+        refreshTokenRepository
+            .findPorHash(hash)
+            .orElseThrow(() -> new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO));
 
-  @Override
-  @Transactional
-  public RefreshToken validar(String refreshToken) {
+    if (refreshTokenExistente.isRevogado()) {
+      revogarTodosPorUsuario(refreshTokenExistente.getUsuario().getId());
+      throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
+    }
+
     RefreshToken refreshTokenEntidade =
         refreshTokenRepository
-            .findValidoPorHash(hashToken(refreshToken))
+            .findValidoPorHashForUpdate(hash)
             .orElseThrow(() -> new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO));
 
     Long usuarioId = refreshTokenEntidade.getUsuario().getId();
@@ -92,7 +81,23 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
       throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
     }
 
+    refreshTokenRepository.revogarPorHash(hash);
+    sessaoService.revogarRefresh(refreshToken);
     return refreshTokenEntidade;
+  }
+
+  @Override
+  @Transactional
+  public void revogar(String refreshToken) {
+    refreshTokenRepository.revogarPorHash(TokenHashUtil.hash(refreshToken));
+    sessaoService.revogarRefresh(refreshToken);
+  }
+
+  @Override
+  @Transactional
+  public void revogarTodosPorUsuario(Long usuarioId) {
+    refreshTokenRepository.revogarPorUsuarioId(usuarioId);
+    sessaoService.invalidarRefreshPorUsuario(usuarioId, refreshTokenExpiraEmSegundos);
   }
 
   @Override
@@ -104,15 +109,5 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     byte[] bytes = new byte[32];
     secureRandom.nextBytes(bytes);
     return HexFormat.of().formatHex(bytes);
-  }
-
-  private String hashToken(String token) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-      return HexFormat.of().formatHex(hash);
-    } catch (NoSuchAlgorithmException exception) {
-      throw new IllegalStateException("Algoritmo SHA-256 não disponível", exception);
-    }
   }
 }

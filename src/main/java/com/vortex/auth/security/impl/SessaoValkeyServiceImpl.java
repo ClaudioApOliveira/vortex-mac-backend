@@ -1,16 +1,13 @@
 package com.vortex.auth.security.impl;
 
 import com.vortex.auth.security.SessaoService;
+import com.vortex.auth.security.TokenHashUtil;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.keys.KeyCommands;
 import io.quarkus.redis.datasource.value.ValueCommands;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 
 @ApplicationScoped
 public class SessaoValkeyServiceImpl implements SessaoService {
@@ -44,7 +41,7 @@ public class SessaoValkeyServiceImpl implements SessaoService {
 
   @Override
   public void registrarRefresh(String refreshToken, Long usuarioId, long ttlSegundos) {
-    String chave = PREFIXO_REFRESH + hashToken(refreshToken);
+    String chave = PREFIXO_REFRESH + TokenHashUtil.hash(refreshToken);
     valores.set(chave, String.valueOf(usuarioId));
     chaves.expire(chave, ttlSegundos);
   }
@@ -56,7 +53,7 @@ public class SessaoValkeyServiceImpl implements SessaoService {
 
   @Override
   public boolean refreshAtivo(String refreshToken) {
-    return valores.get(PREFIXO_REFRESH + hashToken(refreshToken)) != null;
+    return valores.get(PREFIXO_REFRESH + TokenHashUtil.hash(refreshToken)) != null;
   }
 
   @Override
@@ -66,7 +63,7 @@ public class SessaoValkeyServiceImpl implements SessaoService {
 
   @Override
   public void revogarRefresh(String refreshToken) {
-    chaves.del(PREFIXO_REFRESH + hashToken(refreshToken));
+    chaves.del(PREFIXO_REFRESH + TokenHashUtil.hash(refreshToken));
   }
 
   @Override
@@ -84,15 +81,5 @@ public class SessaoValkeyServiceImpl implements SessaoService {
   @Override
   public void liberarRefreshPorUsuario(Long usuarioId) {
     chaves.del(PREFIXO_REFRESH_REVOGADO_USUARIO + usuarioId);
-  }
-
-  private String hashToken(String token) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-      return HexFormat.of().formatHex(hash);
-    } catch (NoSuchAlgorithmException exception) {
-      throw new IllegalStateException("Algoritmo SHA-256 não disponível", exception);
-    }
   }
 }

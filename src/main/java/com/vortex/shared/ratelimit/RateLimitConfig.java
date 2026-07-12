@@ -9,8 +9,14 @@ public class RateLimitConfig {
   @ConfigProperty(name = "vortex.rate-limit.enabled", defaultValue = "true")
   boolean enabled;
 
+  @ConfigProperty(name = "vortex.rate-limit.trust-proxy", defaultValue = "false")
+  boolean trustProxy;
+
   @ConfigProperty(name = "vortex.rate-limit.auth-requests", defaultValue = "10")
   int authRequests;
+
+  @ConfigProperty(name = "vortex.rate-limit.auth-email-requests", defaultValue = "5")
+  int authEmailRequests;
 
   @ConfigProperty(name = "vortex.rate-limit.auth-window-seconds", defaultValue = "60")
   int authWindowSeconds;
@@ -25,8 +31,16 @@ public class RateLimitConfig {
     return enabled;
   }
 
+  public boolean isTrustProxy() {
+    return trustProxy;
+  }
+
   public int getAuthRequests() {
     return authRequests;
+  }
+
+  public int getAuthEmailRequests() {
+    return authEmailRequests;
   }
 
   public int getAuthWindowSeconds() {

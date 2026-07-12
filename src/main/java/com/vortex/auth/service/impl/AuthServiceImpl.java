@@ -9,13 +9,13 @@ import com.vortex.auth.dto.UsuarioAutenticadoResponse;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoRequest;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoResponse;
 import com.vortex.auth.entity.RefreshToken;
-import com.vortex.auth.security.AccessTokenGerado;
 import com.vortex.auth.security.AuthMessages;
 import com.vortex.auth.security.JwtClaimsHelper;
-import com.vortex.auth.security.JwtService;
 import com.vortex.auth.security.RefreshTokenService;
 import com.vortex.auth.security.SessaoService;
+import com.vortex.auth.service.AuthEmailRateLimitService;
 import com.vortex.auth.service.AuthService;
+import com.vortex.auth.service.AuthTokenWriter;
 import com.vortex.cliente.entity.Cliente;
 import com.vortex.ordemservico.dto.OrdemServicoResponse;
 import com.vortex.ordemservico.dto.OrdemServicoStatusHistoricoResponse;
@@ -37,42 +37,49 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 @ApplicationScoped
 public class AuthServiceImpl implements AuthService {
 
+  private static final String BCRYPT_DUMMY_HASH =
+      "$2a$10$uVthyddDgHbLYpzdkg6uV.i.SITKooF.QgWjsjtczMKNOa620SsYi";
+
   private final UsuarioRepository usuarioRepository;
-  private final JwtService jwtService;
   private final RefreshTokenService refreshTokenService;
   private final SessaoService sessaoService;
   private final OrdemServicoService ordemServicoService;
+  private final AuthTokenWriter authTokenWriter;
+  private final AuthEmailRateLimitService authEmailRateLimitService;
   private final JsonWebToken jwt;
   private final SecurityIdentity securityIdentity;
 
   @Inject
   public AuthServiceImpl(
       UsuarioRepository usuarioRepository,
-      JwtService jwtService,
       RefreshTokenService refreshTokenService,
       SessaoService sessaoService,
       OrdemServicoService ordemServicoService,
+      AuthTokenWriter authTokenWriter,
+      AuthEmailRateLimitService authEmailRateLimitService,
       JsonWebToken jwt,
       SecurityIdentity securityIdentity) {
     this.usuarioRepository = usuarioRepository;
-    this.jwtService = jwtService;
     this.refreshTokenService = refreshTokenService;
     this.sessaoService = sessaoService;
     this.ordemServicoService = ordemServicoService;
+    this.authTokenWriter = authTokenWriter;
+    this.authEmailRateLimitService = authEmailRateLimitService;
     this.jwt = jwt;
     this.securityIdentity = securityIdentity;
   }
 
   @Override
-  @Transactional
   public TokensGerados autenticar(LoginRequest request) {
+    authEmailRateLimitService.verificarLimite("login", request.email());
     Usuario usuario = buscarUsuarioAtivo(request.email(), request.senha());
-    return gerarTokens(usuario);
+    return authTokenWriter.gerarTokens(usuario.getId());
   }
 
   @Override
   public VerificarPrimeiroAcessoResponse verificarPrimeiroAcesso(
       VerificarPrimeiroAcessoRequest request) {
+    authEmailRateLimitService.verificarLimite("verificar-primeiro-acesso", request.email());
     String email = normalizarEmail(request.email());
     return usuarioRepository
         .findByEmail(email)
@@ -84,36 +91,27 @@ public class AuthServiceImpl implements AuthService {
   }
 
   @Override
-  @Transactional
   public TokensGerados definirSenhaPrimeiroAcesso(PrimeiroAcessoRequest request) {
+    authEmailRateLimitService.verificarLimite("primeiro-acesso", request.email());
     if (!request.senha().equals(request.confirmarSenha())) {
       throw new BusinessException("As senhas não conferem");
     }
 
     Usuario usuario = buscarUsuarioElegivelPrimeiroAcesso(request.email());
-
-    usuario.setSenha(BcryptUtil.bcryptHash(request.senha()));
-    usuario.setDeveDefinirSenha(false);
-
-    return gerarTokens(usuario);
+    String senhaHash = BcryptUtil.bcryptHash(request.senha());
+    return authTokenWriter.definirSenhaEGerarTokens(usuario.getId(), senhaHash);
   }
 
   @Override
-  @Transactional
   public TokensGerados renovarToken(String refreshToken) {
-    if (refreshToken == null || refreshToken.isBlank()) {
-      throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
-    }
-
-    RefreshToken refreshTokenEntidade = refreshTokenService.validar(refreshToken);
+    RefreshToken refreshTokenEntidade = refreshTokenService.validarERevogar(refreshToken);
 
     Usuario usuario = refreshTokenEntidade.getUsuario();
     if (!usuario.isAtivo()) {
-      throw new BusinessException("Usuário inativo");
+      throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
     }
 
-    refreshTokenService.revogar(refreshToken);
-    return gerarTokens(usuario);
+    return authTokenWriter.gerarTokens(usuario.getId());
   }
 
   @Override
@@ -154,7 +152,6 @@ public class AuthServiceImpl implements AuthService {
   }
 
   @Override
-  @Transactional
   public TokensGerados alterarSenha(AlterarSenhaRequest request) {
     if (!request.novaSenha().equals(request.confirmarSenha())) {
       throw new BusinessException("As senhas não conferem");
@@ -175,55 +172,44 @@ public class AuthServiceImpl implements AuthService {
     }
 
     if (!BcryptUtil.matches(request.senhaAtual(), usuario.getSenha())) {
-      throw new UnauthorizedException("Senha atual incorreta");
+      throw new UnauthorizedException(AuthMessages.CREDENCIAIS_INVALIDAS);
     }
 
-    usuario.setSenha(BcryptUtil.bcryptHash(request.novaSenha()));
-
+    String novaSenhaHash = BcryptUtil.bcryptHash(request.novaSenha());
     String jti = JwtClaimsHelper.obterJti(jwt);
-    if (jti != null) {
-      sessaoService.revogarAccess(jti);
-    }
-
-    refreshTokenService.revogarTodosPorUsuario(usuario.getId());
-
-    return gerarTokens(usuario);
+    return authTokenWriter.alterarSenhaEGerarTokens(usuario.getId(), novaSenhaHash, jti);
   }
 
   @Override
   public List<OrdemServicoResponse> listarMinhasOrdensServico() {
-    Usuario usuario = obterUsuarioAutenticadoEntidade();
-    return ordemServicoService.listarPorUsuarioCliente(usuario.getId());
+    return ordemServicoService.listarPorUsuarioCliente(obterUsuarioIdAutenticado());
   }
 
   @Override
   public PageResponse<OrdemServicoResponse> listarMinhasOrdensServicoPaginado(int page, int size) {
-    Usuario usuario = obterUsuarioAutenticadoEntidade();
-    return ordemServicoService.listarPaginadoPorUsuarioCliente(usuario.getId(), page, size);
+    return ordemServicoService.listarPaginadoPorUsuarioCliente(
+        obterUsuarioIdAutenticado(), page, size);
   }
 
   @Override
   public OrdemServicoResponse buscarMinhaOrdemServico(Long id) {
-    Usuario usuario = obterUsuarioAutenticadoEntidade();
-    return ordemServicoService.buscarPorUsuarioCliente(usuario.getId(), id);
+    return ordemServicoService.buscarPorUsuarioCliente(obterUsuarioIdAutenticado(), id);
   }
 
   @Override
   public OrdemServicoResponse aprovarMinhaOrdemServico(Long id) {
-    Usuario usuario = obterUsuarioAutenticadoEntidade();
-    return ordemServicoService.aprovarPorUsuarioCliente(usuario.getId(), id);
+    return ordemServicoService.aprovarPorUsuarioCliente(obterUsuarioIdAutenticado(), id);
   }
 
   @Override
   public OrdemServicoResponse rejeitarMinhaOrdemServico(Long id) {
-    Usuario usuario = obterUsuarioAutenticadoEntidade();
-    return ordemServicoService.rejeitarPorUsuarioCliente(usuario.getId(), id);
+    return ordemServicoService.rejeitarPorUsuarioCliente(obterUsuarioIdAutenticado(), id);
   }
 
   @Override
   public List<OrdemServicoStatusHistoricoResponse> listarHistoricoMinhaOrdemServico(Long id) {
-    Usuario usuario = obterUsuarioAutenticadoEntidade();
-    return ordemServicoService.listarHistoricoStatusPorUsuarioCliente(usuario.getId(), id);
+    return ordemServicoService.listarHistoricoStatusPorUsuarioCliente(
+        obterUsuarioIdAutenticado(), id);
   }
 
   private UsuarioAutenticadoResponse montarUsuarioAutenticadoResponse(Usuario usuario) {
@@ -236,6 +222,14 @@ public class AuthServiceImpl implements AuthService {
         usuario.getPerfil(),
         clienteId,
         usuario.isDeveDefinirSenha());
+  }
+
+  private long obterUsuarioIdAutenticado() {
+    if (securityIdentity.isAnonymous()) {
+      throw new UnauthorizedException("Usuário não autenticado");
+    }
+
+    return Long.parseLong(jwt.getSubject());
   }
 
   private Usuario obterUsuarioAutenticadoEntidade() {
@@ -294,44 +288,19 @@ public class AuthServiceImpl implements AuthService {
 
   private Usuario buscarUsuarioAtivo(String email, String senha) {
     Usuario usuario = usuarioRepository.findByEmail(normalizarEmail(email)).orElse(null);
+    String hashParaComparar =
+        usuario != null && usuario.getSenha() != null ? usuario.getSenha() : BCRYPT_DUMMY_HASH;
+    boolean senhaCorreta = BcryptUtil.matches(senha, hashParaComparar);
 
-    if (usuario == null || !usuario.isAtivo()) {
-      throw new UnauthorizedException(AuthMessages.CREDENCIAIS_INVALIDAS);
-    }
-
-    if (usuario.isDeveDefinirSenha() || usuario.getSenha() == null) {
-      throw new UnauthorizedException(AuthMessages.CREDENCIAIS_INVALIDAS);
-    }
-
-    if (!BcryptUtil.matches(senha, usuario.getSenha())) {
+    if (usuario == null
+        || !usuario.isAtivo()
+        || usuario.isDeveDefinirSenha()
+        || usuario.getSenha() == null
+        || !senhaCorreta) {
       throw new UnauthorizedException(AuthMessages.CREDENCIAIS_INVALIDAS);
     }
 
     return usuario;
-  }
-
-  private TokensGerados gerarTokens(Usuario usuario) {
-    Long clienteId = usuario.getCliente() != null ? usuario.getCliente().getId() : null;
-    AccessTokenGerado accessTokenGerado =
-        jwtService.gerarToken(
-            usuario.getId(),
-            usuario.getEmail(),
-            usuario.getNome(),
-            usuario.getPerfil().name(),
-            clienteId);
-
-    sessaoService.registrarAccess(
-        accessTokenGerado.jti(), usuario.getId(), jwtService.getAccessTokenExpiraEmSegundos());
-
-    String refreshToken = refreshTokenService.criar(usuario.getId());
-
-    return new TokensGerados(
-        accessTokenGerado.token(),
-        refreshToken,
-        "Bearer",
-        jwtService.getAccessTokenExpiraEmSegundos(),
-        refreshTokenService.getRefreshTokenExpiraEmSegundos(),
-        usuario.isDeveDefinirSenha());
   }
 
   private String normalizarEmail(String email) {

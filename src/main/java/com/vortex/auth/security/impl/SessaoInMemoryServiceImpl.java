@@ -1,14 +1,11 @@
 package com.vortex.auth.security.impl;
 
 import com.vortex.auth.security.SessaoService;
+import com.vortex.auth.security.TokenHashUtil;
 import io.quarkus.arc.profile.IfBuildProfile;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,7 +26,7 @@ public class SessaoInMemoryServiceImpl implements SessaoService {
 
   @Override
   public void registrarRefresh(String refreshToken, Long usuarioId, long ttlSegundos) {
-    refreshTokens.add(hashToken(refreshToken));
+    refreshTokens.add(TokenHashUtil.hash(refreshToken));
   }
 
   @Override
@@ -39,7 +36,7 @@ public class SessaoInMemoryServiceImpl implements SessaoService {
 
   @Override
   public boolean refreshAtivo(String refreshToken) {
-    return refreshTokens.contains(hashToken(refreshToken));
+    return refreshTokens.contains(TokenHashUtil.hash(refreshToken));
   }
 
   @Override
@@ -49,7 +46,7 @@ public class SessaoInMemoryServiceImpl implements SessaoService {
 
   @Override
   public void revogarRefresh(String refreshToken) {
-    refreshTokens.remove(hashToken(refreshToken));
+    refreshTokens.remove(TokenHashUtil.hash(refreshToken));
   }
 
   @Override
@@ -65,15 +62,5 @@ public class SessaoInMemoryServiceImpl implements SessaoService {
   @Override
   public void liberarRefreshPorUsuario(Long usuarioId) {
     usuariosRefreshRevogados.remove(usuarioId);
-  }
-
-  private String hashToken(String token) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-      return HexFormat.of().formatHex(hash);
-    } catch (NoSuchAlgorithmException exception) {
-      throw new IllegalStateException("Algoritmo SHA-256 não disponível", exception);
-    }
   }
 }

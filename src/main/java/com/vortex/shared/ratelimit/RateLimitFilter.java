@@ -1,6 +1,7 @@
 package com.vortex.shared.ratelimit;
 
 import com.vortex.shared.response.ErrorResponse;
+import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
@@ -24,11 +25,16 @@ public class RateLimitFilter implements ContainerRequestFilter {
 
   private final RateLimitService rateLimitService;
   private final RateLimitConfig rateLimitConfig;
+  private final CurrentVertxRequest currentVertxRequest;
 
   @Inject
-  public RateLimitFilter(RateLimitService rateLimitService, RateLimitConfig rateLimitConfig) {
+  public RateLimitFilter(
+      RateLimitService rateLimitService,
+      RateLimitConfig rateLimitConfig,
+      CurrentVertxRequest currentVertxRequest) {
     this.rateLimitService = rateLimitService;
     this.rateLimitConfig = rateLimitConfig;
+    this.currentVertxRequest = currentVertxRequest;
   }
 
   @Override
@@ -78,14 +84,22 @@ public class RateLimitFilter implements ContainerRequestFilter {
   }
 
   private String obterIp(ContainerRequestContext requestContext) {
-    String encaminhado = requestContext.getHeaderString("X-Forwarded-For");
-    if (encaminhado != null && !encaminhado.isBlank()) {
-      return encaminhado.split(",")[0].trim();
+    if (rateLimitConfig.isTrustProxy()) {
+      String encaminhado = requestContext.getHeaderString("X-Forwarded-For");
+      if (encaminhado != null && !encaminhado.isBlank()) {
+        return encaminhado.split(",")[0].trim();
+      }
+
+      String ipReal = requestContext.getHeaderString("X-Real-IP");
+      if (ipReal != null && !ipReal.isBlank()) {
+        return ipReal.trim();
+      }
     }
 
-    String ipReal = requestContext.getHeaderString("X-Real-IP");
-    if (ipReal != null && !ipReal.isBlank()) {
-      return ipReal.trim();
+    if (currentVertxRequest.getCurrent() != null
+        && currentVertxRequest.getCurrent().request() != null
+        && currentVertxRequest.getCurrent().request().remoteAddress() != null) {
+      return currentVertxRequest.getCurrent().request().remoteAddress().host();
     }
 
     return "desconhecido";

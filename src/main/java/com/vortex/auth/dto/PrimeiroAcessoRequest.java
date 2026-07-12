@@ -10,6 +10,6 @@ public record PrimeiroAcessoRequest(
         @Size(max = 150, message = "Email deve ter no máximo 150 caracteres")
         String email,
     @NotBlank(message = "Senha é obrigatória")
-        @Size(min = 6, max = 100, message = "Senha deve ter entre 6 e 100 caracteres")
+        @Size(min = 8, max = 100, message = "Senha deve ter entre 8 e 100 caracteres")
         String senha,
     @NotBlank(message = "Confirmação de senha é obrigatória") String confirmarSenha) {}

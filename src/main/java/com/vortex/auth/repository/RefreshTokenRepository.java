@@ -17,5 +17,7 @@ public interface RefreshTokenRepository {
 
   void revogarPorUsuarioId(Long usuarioId);
 
+  int removerPorUsuarioId(Long usuarioId);
+
   int removerExpiradosERevogados();
 }

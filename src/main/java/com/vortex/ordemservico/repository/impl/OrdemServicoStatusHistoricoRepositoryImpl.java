@@ -35,4 +35,14 @@ public class OrdemServicoStatusHistoricoRepositoryImpl
         .setParameter("ordemServicoId", ordemServicoId)
         .getResultList();
   }
+
+  @Override
+  public void limparReferenciaUsuario(Long usuarioId) {
+    entityManager
+        .createNativeQuery(
+            "UPDATE ordens_servico_status_historico SET usuario_id = NULL WHERE usuario_id ="
+                + " :usuarioId")
+        .setParameter("usuarioId", usuarioId)
+        .executeUpdate();
+  }
 }

@@ -103,6 +103,15 @@ public class OrdemServicoRepositoryImpl implements OrdemServicoRepository {
   }
 
   @Override
+  public long countByTecnicoId(Long tecnicoId) {
+    return entityManager
+        .createQuery(
+            "SELECT COUNT(o) FROM OrdemServico o WHERE o.tecnico.id = :tecnicoId", Long.class)
+        .setParameter("tecnicoId", tecnicoId)
+        .getSingleResult();
+  }
+
+  @Override
   @SuppressWarnings("unchecked")
   public List<OrdemServico> findByVeiculoId(Long veiculoId) {
     return entityManager

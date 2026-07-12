@@ -19,8 +19,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class RefreshTokenServiceImpl implements RefreshTokenService {
 
-  private final SecureRandom secureRandom = new SecureRandom();
-
   private final RefreshTokenRepository refreshTokenRepository;
   private final SessaoService sessaoService;
 
@@ -107,7 +105,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
   private String gerarTokenPlano() {
     byte[] bytes = new byte[32];
-    secureRandom.nextBytes(bytes);
+    new SecureRandom().nextBytes(bytes);
     return HexFormat.of().formatHex(bytes);
   }
 }

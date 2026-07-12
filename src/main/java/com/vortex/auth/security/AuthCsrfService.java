@@ -11,8 +11,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class AuthCsrfService {
 
-  private final SecureRandom secureRandom = new SecureRandom();
-
   @ConfigProperty(name = "vortex.auth.csrf.enabled", defaultValue = "true")
   boolean enabled;
 
@@ -45,7 +43,7 @@ public class AuthCsrfService {
 
   public String gerarToken() {
     byte[] bytes = new byte[32];
-    secureRandom.nextBytes(bytes);
+    new SecureRandom().nextBytes(bytes);
     return HexFormat.of().formatHex(bytes);
   }
 

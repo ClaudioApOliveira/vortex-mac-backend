@@ -3,9 +3,7 @@ package com.vortex.auth.service.impl;
 import com.vortex.auth.dto.AlterarSenhaRequest;
 import com.vortex.auth.dto.AtualizarPerfilRequest;
 import com.vortex.auth.dto.LoginRequest;
-import com.vortex.auth.dto.LogoutRequest;
 import com.vortex.auth.dto.PrimeiroAcessoRequest;
-import com.vortex.auth.dto.RefreshTokenRequest;
 import com.vortex.auth.dto.TokenResponse;
 import com.vortex.auth.dto.UsuarioAutenticadoResponse;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoRequest;
@@ -102,21 +100,25 @@ public class AuthServiceImpl implements AuthService {
 
   @Override
   @Transactional
-  public TokenResponse renovarToken(RefreshTokenRequest request) {
-    RefreshToken refreshToken = refreshTokenService.validar(request.refreshToken());
+  public TokenResponse renovarToken(String refreshToken) {
+    if (refreshToken == null || refreshToken.isBlank()) {
+      throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
+    }
 
-    Usuario usuario = refreshToken.getUsuario();
+    RefreshToken refreshTokenEntidade = refreshTokenService.validar(refreshToken);
+
+    Usuario usuario = refreshTokenEntidade.getUsuario();
     if (!usuario.isAtivo()) {
       throw new BusinessException("Usuário inativo");
     }
 
-    refreshTokenService.revogar(request.refreshToken());
+    refreshTokenService.revogar(refreshToken);
     return gerarTokens(usuario);
   }
 
   @Override
   @Transactional
-  public void logout(LogoutRequest request) {
+  public void logout(String refreshToken) {
     if (securityIdentity.isAnonymous()) {
       throw new UnauthorizedException("Usuário não autenticado");
     }
@@ -126,8 +128,8 @@ public class AuthServiceImpl implements AuthService {
       sessaoService.revogarAccess(jti);
     }
 
-    if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
-      refreshTokenService.revogar(request.refreshToken());
+    if (refreshToken != null && !refreshToken.isBlank()) {
+      refreshTokenService.revogar(refreshToken);
     }
   }
 

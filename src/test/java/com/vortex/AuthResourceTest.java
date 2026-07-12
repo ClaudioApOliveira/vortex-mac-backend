@@ -3,6 +3,7 @@ package com.vortex;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -26,7 +27,8 @@ class AuthResourceTest {
         .statusCode(200)
         .body("success", is(true))
         .body("data.accessToken", notNullValue())
-        .body("data.refreshToken", notNullValue())
+        .body("data.refreshToken", nullValue())
+        .cookie("refresh_token", notNullValue())
         .body("data.tipo", is("Bearer"))
         .body("data.accessTokenExpiraEmSegundos", is(900))
         .body("data.deveDefinirSenha", is(false));
@@ -102,7 +104,8 @@ class AuthResourceTest {
         .body("success", is(true))
         .body("data.deveDefinirSenha", is(false))
         .body("data.accessToken", notNullValue())
-        .body("data.refreshToken", notNullValue());
+        .body("data.refreshToken", nullValue())
+        .cookie("refresh_token", notNullValue());
   }
 
   @Test
@@ -172,30 +175,19 @@ class AuthResourceTest {
 
   @Test
   void refreshComTokenValidoRetornaNovosTokens() {
-    String refreshToken =
-        given()
-            .contentType(ContentType.JSON)
-            .body(
-                Map.of(
-                    "email", "admin@vortex.com",
-                    "senha", "admin123"))
-            .when()
-            .post("/api/auth/login")
-            .then()
-            .statusCode(200)
-            .extract()
-            .path("data.refreshToken");
+    String refreshToken = AuthTestHelper.obterRefreshTokenAdmin();
 
     given()
         .contentType(ContentType.JSON)
-        .body(Map.of("refreshToken", refreshToken))
+        .cookie("refresh_token", refreshToken)
         .when()
         .post("/api/auth/refresh")
         .then()
         .statusCode(200)
         .body("success", is(true))
         .body("data.accessToken", notNullValue())
-        .body("data.refreshToken", notNullValue());
+        .body("data.refreshToken", nullValue())
+        .cookie("refresh_token", notNullValue());
   }
 
   @Test
@@ -212,12 +204,12 @@ class AuthResourceTest {
   @Test
   void logoutInvalidaAccessToken() {
     String accessToken = AuthTestHelper.obterTokenAdmin();
+    String refreshToken = AuthTestHelper.obterRefreshTokenAdmin();
 
     given()
         .auth()
         .oauth2(accessToken)
-        .contentType(ContentType.JSON)
-        .body(Map.of("refreshToken", ""))
+        .cookie("refresh_token", refreshToken)
         .when()
         .post("/api/auth/logout")
         .then()
@@ -309,7 +301,8 @@ class AuthResourceTest {
             .statusCode(200)
             .body("success", is(true))
             .body("data.accessToken", notNullValue())
-            .body("data.refreshToken", notNullValue())
+            .body("data.refreshToken", nullValue())
+            .cookie("refresh_token", notNullValue())
             .extract()
             .path("data.accessToken");
 
@@ -343,19 +336,7 @@ class AuthResourceTest {
 
   @Test
   void alterarSenhaRevogaRefreshTokensAnteriores() {
-    String refreshTokenAntigo =
-        given()
-            .contentType(ContentType.JSON)
-            .body(
-                Map.of(
-                    "email", "admin@vortex.com",
-                    "senha", "admin123"))
-            .when()
-            .post("/api/auth/login")
-            .then()
-            .statusCode(200)
-            .extract()
-            .path("data.refreshToken");
+    String refreshTokenAntigo = AuthTestHelper.obterRefreshTokenAdmin();
 
     given()
         .auth()
@@ -373,7 +354,7 @@ class AuthResourceTest {
 
     given()
         .contentType(ContentType.JSON)
-        .body(Map.of("refreshToken", refreshTokenAntigo))
+        .cookie("refresh_token", refreshTokenAntigo)
         .when()
         .post("/api/auth/refresh")
         .then()

@@ -3,13 +3,13 @@ package com.vortex.auth.resource;
 import com.vortex.auth.dto.AlterarSenhaRequest;
 import com.vortex.auth.dto.AtualizarPerfilRequest;
 import com.vortex.auth.dto.LoginRequest;
-import com.vortex.auth.dto.LogoutRequest;
 import com.vortex.auth.dto.PrimeiroAcessoRequest;
 import com.vortex.auth.dto.RefreshTokenRequest;
 import com.vortex.auth.dto.TokenResponse;
 import com.vortex.auth.dto.UsuarioAutenticadoResponse;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoRequest;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoResponse;
+import com.vortex.auth.security.AuthCookieService;
 import com.vortex.auth.service.AuthService;
 import com.vortex.ordemservico.dto.OrdemServicoResponse;
 import com.vortex.ordemservico.dto.OrdemServicoStatusHistoricoResponse;
@@ -21,6 +21,7 @@ import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -30,6 +31,7 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import java.util.List;
 import java.util.logging.Logger;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
@@ -43,27 +45,33 @@ public class AuthResource {
 
   private static final Logger LOG = Logger.getLogger(AuthResource.class.getName());
   private final AuthService authService;
+  private final AuthCookieService authCookieService;
 
   @Inject
-  public AuthResource(AuthService authService) {
+  public AuthResource(AuthService authService, AuthCookieService authCookieService) {
     this.authService = authService;
+    this.authCookieService = authCookieService;
   }
 
   @POST
   @Path("/login")
   @PermitAll
-  public ApiResponse<TokenResponse> login(@Valid LoginRequest request) {
+  public Response login(@Valid LoginRequest request) {
     TokenResponse response = authService.autenticar(request);
     LOG.info("Login realizado com sucesso");
-    return ApiResponse.ok("Login realizado com sucesso", response);
+    return respostaComToken("Login realizado com sucesso", response);
   }
 
   @POST
   @Path("/refresh")
+  @Consumes({MediaType.APPLICATION_JSON, MediaType.WILDCARD})
   @PermitAll
-  public ApiResponse<TokenResponse> refresh(@Valid RefreshTokenRequest request) {
+  public Response refresh(
+      @CookieParam("refresh_token") String refreshTokenCookie, RefreshTokenRequest request) {
+    String refreshToken = resolverRefreshToken(refreshTokenCookie, request);
     LOG.info("Token renovado com sucesso");
-    return ApiResponse.ok("Token renovado com sucesso", authService.renovarToken(request));
+    return respostaComToken(
+        "Token renovado com sucesso", authService.renovarToken(refreshToken));
   }
 
   @POST
@@ -79,20 +87,23 @@ public class AuthResource {
   @POST
   @Path("/primeiro-acesso")
   @PermitAll
-  public ApiResponse<TokenResponse> primeiroAcesso(@Valid PrimeiroAcessoRequest request) {
+  public Response primeiroAcesso(@Valid PrimeiroAcessoRequest request) {
     LOG.info("Senha definida no primeiro acesso");
-    return ApiResponse.ok(
+    return respostaComToken(
         "Senha definida com sucesso", authService.definirSenhaPrimeiroAcesso(request));
   }
 
   @POST
   @Path("/logout")
+  @Consumes(MediaType.WILDCARD)
   @Authenticated
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-  public ApiResponse<Void> logout(LogoutRequest request) {
+  public Response logout(@CookieParam("refresh_token") String refreshTokenCookie) {
     LOG.info("Logout realizado com sucesso");
-    authService.logout(request);
-    return ApiResponse.ok("Logout realizado com sucesso", null);
+    authService.logout(refreshTokenCookie);
+    return Response.ok(ApiResponse.ok("Logout realizado com sucesso", null))
+        .cookie(authCookieService.limparRefreshToken())
+        .build();
   }
 
   @GET
@@ -118,9 +129,10 @@ public class AuthResource {
   @Path("/me/senha")
   @Authenticated
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-  public ApiResponse<TokenResponse> alterarSenha(@Valid AlterarSenhaRequest request) {
+  public Response alterarSenha(@Valid AlterarSenhaRequest request) {
     LOG.info("Alterando senha do usuário autenticado");
-    return ApiResponse.ok("Senha alterada com sucesso", authService.alterarSenha(request));
+    return respostaComToken(
+        "Senha alterada com sucesso", authService.alterarSenha(request));
   }
 
   @GET
@@ -171,5 +183,25 @@ public class AuthResource {
       @PathParam("id") Long id) {
     LOG.info("Listando histórico de status da ordem do usuário autenticado: " + id);
     return ApiResponse.ok(authService.listarHistoricoMinhaOrdemServico(id));
+  }
+
+  private Response respostaComToken(String message, TokenResponse response) {
+    return Response.ok(ApiResponse.ok(message, response))
+        .cookie(
+            authCookieService.criarRefreshToken(
+                response.refreshToken(), response.refreshTokenExpiraEmSegundos()))
+        .build();
+  }
+
+  private String resolverRefreshToken(String refreshTokenCookie, RefreshTokenRequest request) {
+    if (refreshTokenCookie != null && !refreshTokenCookie.isBlank()) {
+      return refreshTokenCookie;
+    }
+
+    if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
+      return request.refreshToken();
+    }
+
+    return null;
   }
 }

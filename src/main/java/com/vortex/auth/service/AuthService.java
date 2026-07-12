@@ -3,9 +3,7 @@ package com.vortex.auth.service;
 import com.vortex.auth.dto.AlterarSenhaRequest;
 import com.vortex.auth.dto.AtualizarPerfilRequest;
 import com.vortex.auth.dto.LoginRequest;
-import com.vortex.auth.dto.LogoutRequest;
 import com.vortex.auth.dto.PrimeiroAcessoRequest;
-import com.vortex.auth.dto.RefreshTokenRequest;
 import com.vortex.auth.dto.TokenResponse;
 import com.vortex.auth.dto.UsuarioAutenticadoResponse;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoRequest;
@@ -23,9 +21,9 @@ public interface AuthService {
 
   TokenResponse definirSenhaPrimeiroAcesso(PrimeiroAcessoRequest request);
 
-  TokenResponse renovarToken(RefreshTokenRequest request);
+  TokenResponse renovarToken(String refreshToken);
 
-  void logout(LogoutRequest request);
+  void logout(String refreshToken);
 
   UsuarioAutenticadoResponse obterUsuarioAutenticado();
 

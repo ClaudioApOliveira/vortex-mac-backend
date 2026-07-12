@@ -12,6 +12,7 @@ public enum RefreshTokenQuery {
   REVOGAR_POR_USUARIO_ID(
       "UPDATE refresh_tokens SET revogado = TRUE WHERE usuario_id = :usuarioId AND revogado ="
           + " FALSE"),
+  REMOVER_POR_USUARIO_ID("DELETE FROM refresh_tokens WHERE usuario_id = :usuarioId"),
   REMOVER_EXPIRADOS_E_REVOGADOS(
       "DELETE FROM refresh_tokens WHERE expira_em < CURRENT_TIMESTAMP OR revogado = TRUE");
 

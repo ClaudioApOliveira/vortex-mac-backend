@@ -99,6 +99,13 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
   }
 
   @Override
+  @Transactional
+  public void removerTodosPorUsuario(Long usuarioId) {
+    sessaoService.invalidarRefreshPorUsuario(usuarioId, refreshTokenExpiraEmSegundos);
+    refreshTokenRepository.removerPorUsuarioId(usuarioId);
+  }
+
+  @Override
   public long getRefreshTokenExpiraEmSegundos() {
     return refreshTokenExpiraEmSegundos;
   }

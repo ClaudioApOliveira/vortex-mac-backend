@@ -8,4 +8,6 @@ public interface OrdemServicoStatusHistoricoRepository {
   OrdemServicoStatusHistorico save(OrdemServicoStatusHistorico historico);
 
   List<OrdemServicoStatusHistorico> findByOrdemServicoIdOrderByCriadoEmDesc(Long ordemServicoId);
+
+  void limparReferenciaUsuario(Long usuarioId);
 }

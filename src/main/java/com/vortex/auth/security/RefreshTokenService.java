@@ -13,5 +13,7 @@ public interface RefreshTokenService {
 
   void revogarTodosPorUsuario(Long usuarioId);
 
+  void removerTodosPorUsuario(Long usuarioId);
+
   long getRefreshTokenExpiraEmSegundos();
 }

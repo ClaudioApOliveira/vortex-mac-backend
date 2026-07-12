@@ -22,6 +22,8 @@ public interface OrdemServicoRepository {
 
   long countByClienteId(Long clienteId);
 
+  long countByTecnicoId(Long tecnicoId);
+
   List<OrdemServico> findByVeiculoId(Long veiculoId);
 
   void delete(OrdemServico ordemServico);

@@ -67,6 +67,14 @@ public class RefreshTokenRepositoryImpl implements RefreshTokenRepository {
   }
 
   @Override
+  public int removerPorUsuarioId(Long usuarioId) {
+    return entityManager
+        .createNativeQuery(RefreshTokenQuery.REMOVER_POR_USUARIO_ID.getSql())
+        .setParameter("usuarioId", usuarioId)
+        .executeUpdate();
+  }
+
+  @Override
   public int removerExpiradosERevogados() {
     return entityManager
         .createNativeQuery(RefreshTokenQuery.REMOVER_EXPIRADOS_E_REVOGADOS.getSql())

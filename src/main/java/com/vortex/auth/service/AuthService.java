@@ -4,7 +4,7 @@ import com.vortex.auth.dto.AlterarSenhaRequest;
 import com.vortex.auth.dto.AtualizarPerfilRequest;
 import com.vortex.auth.dto.LoginRequest;
 import com.vortex.auth.dto.PrimeiroAcessoRequest;
-import com.vortex.auth.dto.TokenResponse;
+import com.vortex.auth.dto.TokensGerados;
 import com.vortex.auth.dto.UsuarioAutenticadoResponse;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoRequest;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoResponse;
@@ -15,13 +15,13 @@ import java.util.List;
 
 public interface AuthService {
 
-  TokenResponse autenticar(LoginRequest request);
+  TokensGerados autenticar(LoginRequest request);
 
   VerificarPrimeiroAcessoResponse verificarPrimeiroAcesso(VerificarPrimeiroAcessoRequest request);
 
-  TokenResponse definirSenhaPrimeiroAcesso(PrimeiroAcessoRequest request);
+  TokensGerados definirSenhaPrimeiroAcesso(PrimeiroAcessoRequest request);
 
-  TokenResponse renovarToken(String refreshToken);
+  TokensGerados renovarToken(String refreshToken);
 
   void logout(String refreshToken);
 
@@ -29,7 +29,7 @@ public interface AuthService {
 
   UsuarioAutenticadoResponse atualizarPerfil(AtualizarPerfilRequest request);
 
-  TokenResponse alterarSenha(AlterarSenhaRequest request);
+  TokensGerados alterarSenha(AlterarSenhaRequest request);
 
   List<OrdemServicoResponse> listarMinhasOrdensServico();
 

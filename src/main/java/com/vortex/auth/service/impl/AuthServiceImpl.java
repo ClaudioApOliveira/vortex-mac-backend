@@ -4,7 +4,7 @@ import com.vortex.auth.dto.AlterarSenhaRequest;
 import com.vortex.auth.dto.AtualizarPerfilRequest;
 import com.vortex.auth.dto.LoginRequest;
 import com.vortex.auth.dto.PrimeiroAcessoRequest;
-import com.vortex.auth.dto.TokenResponse;
+import com.vortex.auth.dto.TokensGerados;
 import com.vortex.auth.dto.UsuarioAutenticadoResponse;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoRequest;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoResponse;
@@ -65,7 +65,7 @@ public class AuthServiceImpl implements AuthService {
 
   @Override
   @Transactional
-  public TokenResponse autenticar(LoginRequest request) {
+  public TokensGerados autenticar(LoginRequest request) {
     Usuario usuario = buscarUsuarioAtivo(request.email(), request.senha());
     return gerarTokens(usuario);
   }
@@ -85,7 +85,7 @@ public class AuthServiceImpl implements AuthService {
 
   @Override
   @Transactional
-  public TokenResponse definirSenhaPrimeiroAcesso(PrimeiroAcessoRequest request) {
+  public TokensGerados definirSenhaPrimeiroAcesso(PrimeiroAcessoRequest request) {
     if (!request.senha().equals(request.confirmarSenha())) {
       throw new BusinessException("As senhas não conferem");
     }
@@ -100,7 +100,7 @@ public class AuthServiceImpl implements AuthService {
 
   @Override
   @Transactional
-  public TokenResponse renovarToken(String refreshToken) {
+  public TokensGerados renovarToken(String refreshToken) {
     if (refreshToken == null || refreshToken.isBlank()) {
       throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
     }
@@ -155,7 +155,7 @@ public class AuthServiceImpl implements AuthService {
 
   @Override
   @Transactional
-  public TokenResponse alterarSenha(AlterarSenhaRequest request) {
+  public TokensGerados alterarSenha(AlterarSenhaRequest request) {
     if (!request.novaSenha().equals(request.confirmarSenha())) {
       throw new BusinessException("As senhas não conferem");
     }
@@ -310,7 +310,7 @@ public class AuthServiceImpl implements AuthService {
     return usuario;
   }
 
-  private TokenResponse gerarTokens(Usuario usuario) {
+  private TokensGerados gerarTokens(Usuario usuario) {
     Long clienteId = usuario.getCliente() != null ? usuario.getCliente().getId() : null;
     AccessTokenGerado accessTokenGerado =
         jwtService.gerarToken(
@@ -325,7 +325,7 @@ public class AuthServiceImpl implements AuthService {
 
     String refreshToken = refreshTokenService.criar(usuario.getId());
 
-    return new TokenResponse(
+    return new TokensGerados(
         accessTokenGerado.token(),
         refreshToken,
         "Bearer",

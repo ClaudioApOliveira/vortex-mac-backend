@@ -5,7 +5,7 @@ import com.vortex.auth.dto.AtualizarPerfilRequest;
 import com.vortex.auth.dto.LoginRequest;
 import com.vortex.auth.dto.PrimeiroAcessoRequest;
 import com.vortex.auth.dto.RefreshTokenRequest;
-import com.vortex.auth.dto.TokenResponse;
+import com.vortex.auth.dto.TokensGerados;
 import com.vortex.auth.dto.UsuarioAutenticadoResponse;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoRequest;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoResponse;
@@ -57,9 +57,9 @@ public class AuthResource {
   @Path("/login")
   @PermitAll
   public Response login(@Valid LoginRequest request) {
-    TokenResponse response = authService.autenticar(request);
+    TokensGerados tokens = authService.autenticar(request);
     LOG.info("Login realizado com sucesso");
-    return respostaComToken("Login realizado com sucesso", response);
+    return respostaComToken("Login realizado com sucesso", tokens);
   }
 
   @POST
@@ -185,11 +185,11 @@ public class AuthResource {
     return ApiResponse.ok(authService.listarHistoricoMinhaOrdemServico(id));
   }
 
-  private Response respostaComToken(String message, TokenResponse response) {
-    return Response.ok(ApiResponse.ok(message, response))
+  private Response respostaComToken(String message, TokensGerados tokens) {
+    return Response.ok(ApiResponse.ok(message, tokens.toResponse()))
         .cookie(
             authCookieService.criarRefreshToken(
-                response.refreshToken(), response.refreshTokenExpiraEmSegundos()))
+                tokens.refreshToken(), tokens.refreshTokenExpiraEmSegundos()))
         .build();
   }
 

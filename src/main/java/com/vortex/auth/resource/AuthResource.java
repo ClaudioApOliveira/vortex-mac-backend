@@ -10,6 +10,7 @@ import com.vortex.auth.dto.UsuarioAutenticadoResponse;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoRequest;
 import com.vortex.auth.dto.VerificarPrimeiroAcessoResponse;
 import com.vortex.auth.security.AuthCookieService;
+import com.vortex.auth.security.AuthCsrfService;
 import com.vortex.auth.service.AuthService;
 import com.vortex.ordemservico.dto.OrdemServicoResponse;
 import com.vortex.ordemservico.dto.OrdemServicoStatusHistoricoResponse;
@@ -33,6 +34,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
@@ -46,11 +48,16 @@ public class AuthResource {
   private static final Logger LOG = Logger.getLogger(AuthResource.class.getName());
   private final AuthService authService;
   private final AuthCookieService authCookieService;
+  private final AuthCsrfService authCsrfService;
 
   @Inject
-  public AuthResource(AuthService authService, AuthCookieService authCookieService) {
+  public AuthResource(
+      AuthService authService,
+      AuthCookieService authCookieService,
+      AuthCsrfService authCsrfService) {
     this.authService = authService;
     this.authCookieService = authCookieService;
+    this.authCsrfService = authCsrfService;
   }
 
   @POST
@@ -58,7 +65,7 @@ public class AuthResource {
   @PermitAll
   public Response login(@Valid LoginRequest request) {
     TokensGerados tokens = authService.autenticar(request);
-    LOG.info("Login realizado com sucesso");
+    LOG.log(Level.FINE, "Login realizado com sucesso");
     return respostaComToken("Login realizado com sucesso", tokens);
   }
 
@@ -69,9 +76,8 @@ public class AuthResource {
   public Response refresh(
       @CookieParam("refresh_token") String refreshTokenCookie, RefreshTokenRequest request) {
     String refreshToken = resolverRefreshToken(refreshTokenCookie, request);
-    LOG.info("Token renovado com sucesso");
-    return respostaComToken(
-        "Token renovado com sucesso", authService.renovarToken(refreshToken));
+    LOG.log(Level.FINE, "Token renovado com sucesso");
+    return respostaComToken("Token renovado com sucesso", authService.renovarToken(refreshToken));
   }
 
   @POST
@@ -79,16 +85,17 @@ public class AuthResource {
   @PermitAll
   public ApiResponse<VerificarPrimeiroAcessoResponse> verificarPrimeiroAcesso(
       @Valid VerificarPrimeiroAcessoRequest request) {
-    LOG.info("Verificando elegibilidade de primeiro acesso");
+    LOG.log(Level.FINE, "Verificando elegibilidade de primeiro acesso");
     return ApiResponse.ok(
-        "Email habilitado para primeiro acesso", authService.verificarPrimeiroAcesso(request));
+        "Se o email estiver habilitado, você poderá definir sua senha",
+        authService.verificarPrimeiroAcesso(request));
   }
 
   @POST
   @Path("/primeiro-acesso")
   @PermitAll
   public Response primeiroAcesso(@Valid PrimeiroAcessoRequest request) {
-    LOG.info("Senha definida no primeiro acesso");
+    LOG.log(Level.FINE, "Senha definida no primeiro acesso");
     return respostaComToken(
         "Senha definida com sucesso", authService.definirSenhaPrimeiroAcesso(request));
   }
@@ -99,10 +106,11 @@ public class AuthResource {
   @Authenticated
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
   public Response logout(@CookieParam("refresh_token") String refreshTokenCookie) {
-    LOG.info("Logout realizado com sucesso");
+    LOG.log(Level.FINE, "Logout realizado com sucesso");
     authService.logout(refreshTokenCookie);
     return Response.ok(ApiResponse.ok("Logout realizado com sucesso", null))
         .cookie(authCookieService.limparRefreshToken())
+        .cookie(authCsrfService.limparCookie())
         .build();
   }
 
@@ -111,7 +119,7 @@ public class AuthResource {
   @Authenticated
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
   public ApiResponse<UsuarioAutenticadoResponse> me() {
-    LOG.info("Obtendo usuário autenticado");
+    LOG.log(Level.FINE, "Obtendo usuário autenticado");
     return ApiResponse.ok(authService.obterUsuarioAutenticado());
   }
 
@@ -121,7 +129,7 @@ public class AuthResource {
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
   public ApiResponse<UsuarioAutenticadoResponse> atualizarPerfil(
       @Valid AtualizarPerfilRequest request) {
-    LOG.info("Atualizando perfil do usuário autenticado");
+    LOG.log(Level.FINE, "Atualizando perfil do usuário autenticado");
     return ApiResponse.ok("Perfil atualizado com sucesso", authService.atualizarPerfil(request));
   }
 
@@ -130,9 +138,8 @@ public class AuthResource {
   @Authenticated
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
   public Response alterarSenha(@Valid AlterarSenhaRequest request) {
-    LOG.info("Alterando senha do usuário autenticado");
-    return respostaComToken(
-        "Senha alterada com sucesso", authService.alterarSenha(request));
+    LOG.log(Level.FINE, "Alterando senha do usuário autenticado");
+    return respostaComToken("Senha alterada com sucesso", authService.alterarSenha(request));
   }
 
   @GET
@@ -142,7 +149,7 @@ public class AuthResource {
   public ApiResponse<PageResponse<OrdemServicoResponse>> minhasOrdensServico(
       @QueryParam("page") @DefaultValue("0") int page,
       @QueryParam("size") @DefaultValue("10") int size) {
-    LOG.info("Listando ordens de serviço do usuário autenticado");
+    LOG.log(Level.FINE, "Listando ordens de serviço do usuário autenticado");
     return ApiResponse.ok(authService.listarMinhasOrdensServicoPaginado(page, size));
   }
 
@@ -151,7 +158,7 @@ public class AuthResource {
   @Authenticated
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
   public ApiResponse<OrdemServicoResponse> minhaOrdemServico(@PathParam("id") Long id) {
-    LOG.info("Buscando ordem de serviço do usuário autenticado: " + id);
+    LOG.log(Level.FINE, "Buscando ordem de serviço do usuário autenticado: {0}", id);
     return ApiResponse.ok(authService.buscarMinhaOrdemServico(id));
   }
 
@@ -160,7 +167,7 @@ public class AuthResource {
   @Authenticated
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
   public ApiResponse<OrdemServicoResponse> aprovarMinhaOrdemServico(@PathParam("id") Long id) {
-    LOG.info("Aprovando orçamento do usuário autenticado: " + id);
+    LOG.log(Level.FINE, "Aprovando orçamento do usuário autenticado: {0}", id);
     return ApiResponse.ok(
         "Orçamento aprovado com sucesso", authService.aprovarMinhaOrdemServico(id));
   }
@@ -170,7 +177,7 @@ public class AuthResource {
   @Authenticated
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
   public ApiResponse<OrdemServicoResponse> rejeitarMinhaOrdemServico(@PathParam("id") Long id) {
-    LOG.info("Rejeitando orçamento do usuário autenticado: " + id);
+    LOG.log(Level.FINE, "Rejeitando orçamento do usuário autenticado: {0}", id);
     return ApiResponse.ok(
         "Orçamento rejeitado com sucesso", authService.rejeitarMinhaOrdemServico(id));
   }
@@ -181,15 +188,17 @@ public class AuthResource {
   @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
   public ApiResponse<List<OrdemServicoStatusHistoricoResponse>> historicoMinhaOrdemServico(
       @PathParam("id") Long id) {
-    LOG.info("Listando histórico de status da ordem do usuário autenticado: " + id);
+    LOG.log(Level.FINE, "Listando histórico de status da ordem do usuário autenticado: {0}", id);
     return ApiResponse.ok(authService.listarHistoricoMinhaOrdemServico(id));
   }
 
   private Response respostaComToken(String message, TokensGerados tokens) {
+    String csrfToken = authCsrfService.gerarToken();
     return Response.ok(ApiResponse.ok(message, tokens.toResponse()))
         .cookie(
             authCookieService.criarRefreshToken(
                 tokens.refreshToken(), tokens.refreshTokenExpiraEmSegundos()))
+        .cookie(authCsrfService.criarCookie(csrfToken))
         .build();
   }
 

@@ -1,12 +1,13 @@
 package com.vortex.auth.security;
 
 import com.vortex.auth.entity.RefreshToken;
+import com.vortex.usuario.entity.Usuario;
 
 public interface RefreshTokenService {
 
-  String criar(Long usuarioId);
+  String criar(Usuario usuario);
 
-  RefreshToken validar(String refreshToken);
+  RefreshToken validarERevogar(String refreshToken);
 
   void revogar(String refreshToken);
 

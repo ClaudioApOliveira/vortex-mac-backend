@@ -20,7 +20,7 @@ public class AuthCsrfService {
   @ConfigProperty(name = "vortex.auth.csrf.header-name", defaultValue = "X-CSRF-Token")
   String headerName;
 
-  @ConfigProperty(name = "vortex.auth.cookie.path", defaultValue = "/api/auth")
+  @ConfigProperty(name = "vortex.auth.csrf.cookie-path", defaultValue = "/")
   String path;
 
   @ConfigProperty(name = "vortex.auth.cookie.secure", defaultValue = "false")

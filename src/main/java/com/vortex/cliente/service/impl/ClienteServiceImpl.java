@@ -13,6 +13,7 @@ import com.vortex.shared.exception.NotFoundException;
 import com.vortex.usuario.entity.Perfil;
 import com.vortex.usuario.entity.Usuario;
 import com.vortex.usuario.repository.UsuarioRepository;
+import com.vortex.usuario.service.UsuarioExclusaoService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -23,12 +24,16 @@ public class ClienteServiceImpl implements ClienteService {
 
   private final ClienteRepository clienteRepository;
   private final UsuarioRepository usuarioRepository;
+  private final UsuarioExclusaoService usuarioExclusaoService;
 
   @Inject
   public ClienteServiceImpl(
-      ClienteRepository clienteRepository, UsuarioRepository usuarioRepository) {
+      ClienteRepository clienteRepository,
+      UsuarioRepository usuarioRepository,
+      UsuarioExclusaoService usuarioExclusaoService) {
     this.clienteRepository = clienteRepository;
     this.usuarioRepository = usuarioRepository;
+    this.usuarioExclusaoService = usuarioExclusaoService;
   }
 
   @Override
@@ -84,8 +89,9 @@ public class ClienteServiceImpl implements ClienteService {
   public void excluir(Long id) {
     Cliente cliente = buscarEntidadePorId(id);
 
-    if (cliente.getUsuario() != null) {
-      usuarioRepository.delete(cliente.getUsuario());
+    Usuario usuario = cliente.getUsuario();
+    if (usuario != null) {
+      usuarioExclusaoService.excluirAoRemoverCliente(usuario.getId());
     }
 
     clienteRepository.delete(cliente);

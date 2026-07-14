@@ -11,7 +11,7 @@ public record UsuarioRequest(
         @Email(message = "Email inválido")
         @Size(max = 150, message = "Email deve ter no máximo 150 caracteres")
         String email,
-    @Size(min = 6, max = 100, message = "Senha deve ter entre 6 e 100 caracteres") String senha,
+    @Size(min = 8, max = 100, message = "Senha deve ter entre 8 e 100 caracteres") String senha,
     @NotBlank(message = "Nome é obrigatório")
         @Size(max = 150, message = "Nome deve ter no máximo 150 caracteres")
         String nome,

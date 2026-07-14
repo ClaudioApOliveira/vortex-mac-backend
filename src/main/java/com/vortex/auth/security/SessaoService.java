@@ -14,6 +14,8 @@ public interface SessaoService {
 
   void revogarRefresh(String refreshToken);
 
+  void invalidarAccessPorUsuario(Long usuarioId);
+
   void invalidarRefreshPorUsuario(Long usuarioId, long ttlSegundos);
 
   boolean refreshInvalidadoPorUsuario(Long usuarioId);

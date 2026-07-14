@@ -10,7 +10,8 @@ public enum UsuarioQuery {
       "SELECT COUNT(*) FROM usuarios WHERE email = :email AND id <> :id"),
   CONTAR_POR_CLIENTE_ID("SELECT COUNT(*) FROM usuarios WHERE cliente_id = :clienteId"),
   CONTAR_POR_CLIENTE_ID_E_ID_DIFERENTE(
-      "SELECT COUNT(*) FROM usuarios WHERE cliente_id = :clienteId AND id <> :id");
+      "SELECT COUNT(*) FROM usuarios WHERE cliente_id = :clienteId AND id <> :id"),
+  CONTAR_ADMINS_ATIVOS("SELECT COUNT(*) FROM usuarios WHERE perfil = 'ADMIN' AND ativo = TRUE");
 
   private final String sql;
 

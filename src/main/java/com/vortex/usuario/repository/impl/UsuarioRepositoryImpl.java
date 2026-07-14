@@ -85,6 +85,15 @@ public class UsuarioRepositoryImpl implements UsuarioRepository {
     return countByClienteId(clienteId, id) > 0;
   }
 
+  @Override
+  public long countAdminsAtivos() {
+    return ((Number)
+            entityManager
+                .createNativeQuery(UsuarioQuery.CONTAR_ADMINS_ATIVOS.getSql())
+                .getSingleResult())
+        .longValue();
+  }
+
   private long countByEmail(String email, Long id) {
     UsuarioQuery queryEnum =
         id == null ? UsuarioQuery.CONTAR_POR_EMAIL : UsuarioQuery.CONTAR_POR_EMAIL_E_ID_DIFERENTE;

@@ -176,8 +176,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     String novaSenhaHash = BcryptUtil.bcryptHash(request.novaSenha());
-    String jti = JwtClaimsHelper.obterJti(jwt);
-    return authTokenWriter.alterarSenhaEGerarTokens(usuario.getId(), novaSenhaHash, jti);
+    return authTokenWriter.alterarSenhaEGerarTokens(usuario.getId(), novaSenhaHash);
   }
 
   @Override

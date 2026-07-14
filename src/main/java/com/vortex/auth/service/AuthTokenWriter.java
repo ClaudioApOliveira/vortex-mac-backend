@@ -53,17 +53,14 @@ public class AuthTokenWriter {
   }
 
   @Transactional
-  public TokensGerados alterarSenhaEGerarTokens(Long usuarioId, String novaSenhaHash, String jti) {
+  public TokensGerados alterarSenhaEGerarTokens(Long usuarioId, String novaSenhaHash) {
     Usuario usuario =
         usuarioRepository
             .findById(usuarioId)
             .orElseThrow(() -> new UnauthorizedException("Usuário não encontrado"));
     usuario.setSenha(novaSenhaHash);
 
-    if (jti != null) {
-      sessaoService.revogarAccess(jti);
-    }
-
+    sessaoService.invalidarAccessPorUsuario(usuarioId);
     refreshTokenService.revogarTodosPorUsuario(usuarioId);
     return gerarTokens(usuario);
   }

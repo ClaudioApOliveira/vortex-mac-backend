@@ -26,4 +26,6 @@ public interface UsuarioRepository {
   boolean existsByClienteId(Long clienteId);
 
   boolean existsByClienteIdAndIdNot(Long clienteId, Long id);
+
+  long countAdminsAtivos();
 }

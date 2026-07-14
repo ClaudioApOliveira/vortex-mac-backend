@@ -1,10 +1,7 @@
 package com.vortex.usuario.service.impl;
 
-import com.vortex.auth.security.RefreshTokenService;
 import com.vortex.cliente.entity.Cliente;
 import com.vortex.cliente.repository.ClienteRepository;
-import com.vortex.ordemservico.repository.OrdemServicoRepository;
-import com.vortex.ordemservico.repository.OrdemServicoStatusHistoricoRepository;
 import com.vortex.shared.exception.BusinessException;
 import com.vortex.shared.exception.NotFoundException;
 import com.vortex.usuario.dto.UsuarioRequest;
@@ -12,6 +9,7 @@ import com.vortex.usuario.dto.UsuarioResponse;
 import com.vortex.usuario.entity.Perfil;
 import com.vortex.usuario.entity.Usuario;
 import com.vortex.usuario.repository.UsuarioRepository;
+import com.vortex.usuario.service.UsuarioExclusaoService;
 import com.vortex.usuario.service.UsuarioService;
 import io.quarkus.elytron.security.common.BcryptUtil;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -24,22 +22,16 @@ public class UsuarioServiceImpl implements UsuarioService {
 
   private final UsuarioRepository usuarioRepository;
   private final ClienteRepository clienteRepository;
-  private final RefreshTokenService refreshTokenService;
-  private final OrdemServicoRepository ordemServicoRepository;
-  private final OrdemServicoStatusHistoricoRepository ordemServicoStatusHistoricoRepository;
+  private final UsuarioExclusaoService usuarioExclusaoService;
 
   @Inject
   public UsuarioServiceImpl(
       UsuarioRepository usuarioRepository,
       ClienteRepository clienteRepository,
-      RefreshTokenService refreshTokenService,
-      OrdemServicoRepository ordemServicoRepository,
-      OrdemServicoStatusHistoricoRepository ordemServicoStatusHistoricoRepository) {
+      UsuarioExclusaoService usuarioExclusaoService) {
     this.usuarioRepository = usuarioRepository;
     this.clienteRepository = clienteRepository;
-    this.refreshTokenService = refreshTokenService;
-    this.ordemServicoRepository = ordemServicoRepository;
-    this.ordemServicoStatusHistoricoRepository = ordemServicoStatusHistoricoRepository;
+    this.usuarioExclusaoService = usuarioExclusaoService;
   }
 
   @Override
@@ -107,25 +99,13 @@ public class UsuarioServiceImpl implements UsuarioService {
   @Override
   @Transactional
   public void excluir(Long id) {
-    Usuario usuario = buscarEntidadePorId(id);
-    validarExclusaoSemOrdensServico(id);
-    refreshTokenService.removerTodosPorUsuario(id);
-    ordemServicoStatusHistoricoRepository.limparReferenciaUsuario(id);
-    usuarioRepository.delete(usuario);
+    usuarioExclusaoService.excluir(id);
   }
 
   public Usuario buscarEntidadePorId(Long id) {
     return usuarioRepository
         .findById(id)
         .orElseThrow(() -> new NotFoundException("Usuário não encontrado com id: " + id));
-  }
-
-  private void validarExclusaoSemOrdensServico(Long usuarioId) {
-    if (ordemServicoRepository.countByTecnicoId(usuarioId) > 0) {
-      throw new BusinessException(
-          "Não é possível excluir o usuário porque ele está vinculado a ordens de serviço como"
-              + " técnico");
-    }
   }
 
   private void validarEmailUnico(String email, Long id) {

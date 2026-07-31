@@ -4,7 +4,6 @@ import com.vortex.auth.entity.RefreshToken;
 import com.vortex.auth.repository.RefreshTokenRepository;
 import com.vortex.auth.security.AuthMessages;
 import com.vortex.auth.security.RefreshTokenService;
-import com.vortex.auth.security.SessaoService;
 import com.vortex.auth.security.TokenHashUtil;
 import com.vortex.shared.exception.UnauthorizedException;
 import com.vortex.usuario.entity.Usuario;
@@ -20,16 +19,13 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 public class RefreshTokenServiceImpl implements RefreshTokenService {
 
   private final RefreshTokenRepository refreshTokenRepository;
-  private final SessaoService sessaoService;
 
   @ConfigProperty(name = "vortex.jwt.refresh-token.lifespan", defaultValue = "604800")
   long refreshTokenExpiraEmSegundos;
 
   @Inject
-  public RefreshTokenServiceImpl(
-      RefreshTokenRepository refreshTokenRepository, SessaoService sessaoService) {
+  public RefreshTokenServiceImpl(RefreshTokenRepository refreshTokenRepository) {
     this.refreshTokenRepository = refreshTokenRepository;
-    this.sessaoService = sessaoService;
   }
 
   @Override
@@ -42,8 +38,6 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     refreshToken.setExpiraEm(LocalDateTime.now().plusSeconds(refreshTokenExpiraEmSegundos));
 
     refreshTokenRepository.save(refreshToken);
-    sessaoService.liberarRefreshPorUsuario(usuario.getId());
-    sessaoService.registrarRefresh(tokenPlano, usuario.getId(), refreshTokenExpiraEmSegundos);
     return tokenPlano;
   }
 
@@ -70,17 +64,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             .findValidoPorHashForUpdate(hash)
             .orElseThrow(() -> new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO));
 
-    Long usuarioId = refreshTokenEntidade.getUsuario().getId();
-    if (sessaoService.refreshInvalidadoPorUsuario(usuarioId)) {
-      throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
-    }
-
-    if (!sessaoService.refreshAtivo(refreshToken)) {
-      throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
-    }
-
     refreshTokenRepository.revogarPorHash(hash);
-    sessaoService.revogarRefresh(refreshToken);
     return refreshTokenEntidade;
   }
 
@@ -88,20 +72,17 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
   @Transactional
   public void revogar(String refreshToken) {
     refreshTokenRepository.revogarPorHash(TokenHashUtil.hash(refreshToken));
-    sessaoService.revogarRefresh(refreshToken);
   }
 
   @Override
   @Transactional
   public void revogarTodosPorUsuario(Long usuarioId) {
     refreshTokenRepository.revogarPorUsuarioId(usuarioId);
-    sessaoService.invalidarRefreshPorUsuario(usuarioId, refreshTokenExpiraEmSegundos);
   }
 
   @Override
   @Transactional
   public void removerTodosPorUsuario(Long usuarioId) {
-    sessaoService.invalidarRefreshPorUsuario(usuarioId, refreshTokenExpiraEmSegundos);
     refreshTokenRepository.removerPorUsuarioId(usuarioId);
   }
 

@@ -26,7 +26,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Path("/api/clientes")
 @Tag(name = "Clientes", description = "CRUD de clientes da oficina")
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@RolesAllowed({"ADMIN", "TECNICO"})
+@RolesAllowed({"ADMIN", "GERENTE", "TECNICO"})
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class ClienteResource {

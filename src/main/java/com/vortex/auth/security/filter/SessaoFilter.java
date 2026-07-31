@@ -16,14 +16,14 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 
 @Provider
 @Priority(Priorities.AUTHORIZATION)
-public class SessaoValkeyFilter implements ContainerRequestFilter {
+public class SessaoFilter implements ContainerRequestFilter {
 
   private final SessaoService sessaoService;
   private final SecurityIdentity securityIdentity;
   private final Instance<JsonWebToken> jwt;
 
   @Inject
-  public SessaoValkeyFilter(
+  public SessaoFilter(
       SessaoService sessaoService, SecurityIdentity securityIdentity, Instance<JsonWebToken> jwt) {
     this.sessaoService = sessaoService;
     this.securityIdentity = securityIdentity;

@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS ordens_servico_status_historico (
     CONSTRAINT fk_os_status_hist_usuario
         FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
     CONSTRAINT chk_os_status_hist_origem
-        CHECK (origem IN ('CLIENTE', 'TECNICO', 'ADMIN', 'SISTEMA'))
+        CHECK (origem IN ('CLIENTE', 'TECNICO', 'GERENTE', 'ADMIN', 'SISTEMA'))
 );
 
 MERGE INTO usuarios (email, senha, nome, perfil, ativo, deve_definir_senha, criado_em, atualizado_em)

@@ -290,7 +290,8 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
     }
 
     if (usuario.getPerfil() == Perfil.TECNICO && statusSolicitado == OrdemServicoStatus.APROVADO) {
-      throw new BusinessException("Somente o cliente ou administrador pode aprovar orçamentos.");
+      throw new BusinessException(
+          "Somente o cliente, gerente ou administrador pode aprovar orçamentos.");
     }
   }
 
@@ -326,7 +327,7 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
       throw new BusinessException("Técnico inativo: " + tecnico.getNome());
     }
 
-    if (tecnico.getPerfil() != Perfil.TECNICO && tecnico.getPerfil() != Perfil.ADMIN) {
+    if (tecnico.getPerfil() == Perfil.CLIENTE) {
       throw new BusinessException("Usuário informado não é técnico: " + tecnico.getNome());
     }
 
@@ -399,6 +400,7 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
 
     return switch (usuario.getPerfil()) {
       case ADMIN -> OrdemServicoStatusHistoricoOrigem.ADMIN;
+      case GERENTE -> OrdemServicoStatusHistoricoOrigem.GERENTE;
       case TECNICO -> OrdemServicoStatusHistoricoOrigem.TECNICO;
       case CLIENTE -> OrdemServicoStatusHistoricoOrigem.CLIENTE;
     };

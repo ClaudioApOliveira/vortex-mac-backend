@@ -29,7 +29,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Path("/api/ordens-servico")
 @Tag(name = "Ordens de Serviço", description = "CRUD de ordens de serviço com peças e serviços")
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@RolesAllowed({"ADMIN", "TECNICO"})
+@RolesAllowed({"ADMIN", "GERENTE", "TECNICO"})
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class OrdemServicoResource {

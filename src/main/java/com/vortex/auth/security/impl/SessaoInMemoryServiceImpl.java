@@ -1,7 +1,6 @@
 package com.vortex.auth.security.impl;
 
 import com.vortex.auth.security.SessaoService;
-import com.vortex.auth.security.TokenHashUtil;
 import io.quarkus.arc.profile.IfBuildProfile;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -19,8 +18,6 @@ public class SessaoInMemoryServiceImpl implements SessaoService {
   private final Set<String> accessTokens = ConcurrentHashMap.newKeySet();
   private final Map<String, Long> accessPorJti = new ConcurrentHashMap<>();
   private final Map<Long, Set<String>> accessPorUsuario = new ConcurrentHashMap<>();
-  private final Set<String> refreshTokens = ConcurrentHashMap.newKeySet();
-  private final Set<Long> usuariosRefreshRevogados = ConcurrentHashMap.newKeySet();
 
   @Override
   public void registrarAccess(String jti, Long usuarioId, long ttlSegundos) {
@@ -30,18 +27,8 @@ public class SessaoInMemoryServiceImpl implements SessaoService {
   }
 
   @Override
-  public void registrarRefresh(String refreshToken, Long usuarioId, long ttlSegundos) {
-    refreshTokens.add(TokenHashUtil.hash(refreshToken));
-  }
-
-  @Override
   public boolean accessAtivo(String jti) {
     return accessTokens.contains(jti);
-  }
-
-  @Override
-  public boolean refreshAtivo(String refreshToken) {
-    return refreshTokens.contains(TokenHashUtil.hash(refreshToken));
   }
 
   @Override
@@ -57,11 +44,6 @@ public class SessaoInMemoryServiceImpl implements SessaoService {
   }
 
   @Override
-  public void revogarRefresh(String refreshToken) {
-    refreshTokens.remove(TokenHashUtil.hash(refreshToken));
-  }
-
-  @Override
   public void invalidarAccessPorUsuario(Long usuarioId) {
     Set<String> jtis = accessPorUsuario.remove(usuarioId);
     if (jtis == null) {
@@ -71,20 +53,5 @@ public class SessaoInMemoryServiceImpl implements SessaoService {
       accessTokens.remove(jti);
       accessPorJti.remove(jti);
     }
-  }
-
-  @Override
-  public void invalidarRefreshPorUsuario(Long usuarioId, long ttlSegundos) {
-    usuariosRefreshRevogados.add(usuarioId);
-  }
-
-  @Override
-  public boolean refreshInvalidadoPorUsuario(Long usuarioId) {
-    return usuariosRefreshRevogados.contains(usuarioId);
-  }
-
-  @Override
-  public void liberarRefreshPorUsuario(Long usuarioId) {
-    usuariosRefreshRevogados.remove(usuarioId);
   }
 }

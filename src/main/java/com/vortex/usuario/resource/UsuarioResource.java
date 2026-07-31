@@ -24,9 +24,9 @@ import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 @Path("/api/usuarios")
-@Tag(name = "Usuários", description = "CRUD de usuários internos (ADMIN)")
+@Tag(name = "Usuários", description = "CRUD de usuários internos (ADMIN e GERENTE)")
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@RolesAllowed("ADMIN")
+@RolesAllowed({"ADMIN", "GERENTE"})
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class UsuarioResource {

@@ -1,24 +1,16 @@
 package com.vortex.auth.security;
 
+/**
+ * Allowlist de access tokens ativos, consultada a cada requisição autenticada. A validade dos
+ * refresh tokens é controlada exclusivamente pela tabela {@code refresh_tokens}.
+ */
 public interface SessaoService {
 
   void registrarAccess(String jti, Long usuarioId, long ttlSegundos);
 
-  void registrarRefresh(String refreshToken, Long usuarioId, long ttlSegundos);
-
   boolean accessAtivo(String jti);
-
-  boolean refreshAtivo(String refreshToken);
 
   void revogarAccess(String jti);
 
-  void revogarRefresh(String refreshToken);
-
   void invalidarAccessPorUsuario(Long usuarioId);
-
-  void invalidarRefreshPorUsuario(Long usuarioId, long ttlSegundos);
-
-  boolean refreshInvalidadoPorUsuario(Long usuarioId);
-
-  void liberarRefreshPorUsuario(Long usuarioId);
 }

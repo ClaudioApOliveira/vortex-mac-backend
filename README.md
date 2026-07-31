@@ -9,7 +9,7 @@ Backend da oficina mecânica **Vortex**, desenvolvido com [Quarkus](https://quar
 - **Hibernate ORM** (entidades JPA puras, sem Panache)
 - **SQL nativo** nos repositórios
 - **JWT** (SmallRye JWT) + **refresh token** com rotação
-- **Valkey** (sessões ativas de login/logout)
+- **Sessões e rate limit no PostgreSQL** (tabelas `UNLOGGED`)
 - **OpenCEP** (consulta de endereço por CEP)
 - **Bean Validation**
 - **OpenAPI / Swagger** (perfil `dev`)
@@ -46,8 +46,7 @@ Arquivos de infraestrutura local (`docker-compose.yml`, `docker/`, `Dockerfile`)
 
 | Serviço    | Porta padrão | Uso                          |
 |------------|--------------|------------------------------|
-| PostgreSQL | `5432`       | Banco `mec`                  |
-| Valkey     | `6379`       | Sessões JWT ativas           |
+| PostgreSQL | `5432`       | Banco `mec` (inclui sessões JWT e rate limit) |
 
 Configure a conexão via variáveis de ambiente ou `application.properties` (veja [Configuração](#configuração)).
 
@@ -55,7 +54,7 @@ Configure a conexão via variáveis de ambiente ou `application.properties` (vej
 
 - JDK 25+
 - Maven (ou use o wrapper `./mvnw`)
-- PostgreSQL e Valkey acessíveis (local ou remoto)
+- PostgreSQL acessível (local ou remoto)
 - GraalVM 25 + `native-image` (apenas para build nativo)
 
 ## Como rodar
@@ -68,9 +67,9 @@ Configure a conexão via variáveis de ambiente ou `application.properties` (vej
 
 A chave privada fica em `src/main/resources/keys/privateKey.pem` (ignorada pelo Git).
 
-### 2. Configurar banco e Valkey
+### 2. Configurar banco
 
-Garanta que o PostgreSQL tenha o schema aplicado pela esteira de banco e que o Valkey esteja acessível. Valores padrão de desenvolvimento:
+Garanta que o PostgreSQL tenha o schema aplicado pela esteira de banco. Valores padrão de desenvolvimento:
 
 | Parâmetro | Valor      |
 |-----------|------------|
@@ -78,7 +77,6 @@ Garanta que o PostgreSQL tenha o schema aplicado pela esteira de banco e que o V
 | Usuário   | `postgres` |
 | Senha     | `postgres` |
 | JDBC URL  | `jdbc:postgresql://localhost:5432/mec` |
-| Valkey    | `redis://localhost:6379` |
 
 ### 3. Iniciar a aplicação
 
@@ -102,11 +100,12 @@ API disponível em: http://localhost:8080
 | Access token   | 15 minutos | `vortex.jwt.access-token.lifespan`    |
 | Refresh token  | 7 dias     | `vortex.jwt.refresh-token.lifespan`   |
 
-### Fluxo de sessão (Valkey)
+### Fluxo de sessão
 
-- **Login / refresh:** registra access token (`jti`) e refresh token no Valkey com TTL
-- **Requisições autenticadas:** valida se a sessão ainda está ativa no Valkey
-- **Logout:** remove a sessão do Valkey e revoga o refresh token (opcional no body)
+- **Login / refresh:** registra o access token (`jti`) na tabela `UNLOGGED` `sessoes_access` com expiração; o refresh token é persistido em `refresh_tokens`
+- **Requisições autenticadas:** valida se a sessão ainda está ativa em `sessoes_access`
+- **Logout:** remove a sessão de `sessoes_access` e revoga o refresh token (opcional no body)
+- **Limpeza:** um job agendado (`vortex.sessao-rate-limit.cleanup-cron`) remove sessões e contadores de rate limit expirados
 
 ### Primeiro acesso
 
@@ -163,7 +162,7 @@ Envie o `accessToken` no header `Authorization: Bearer <token>` em todas as rota
 | `CONCLUIDO`        | Serviço finalizado                     |
 | `CANCELADO`        | OS cancelada                           |
 
-Toda OS é criada com status `ORCAMENTO`. A atualização aceita `status` opcional (perfis `ADMIN` e `TECNICO`). O histórico de mudanças de status fica disponível em `/historico-status`.
+Toda OS é criada com status `ORCAMENTO`. A atualização aceita `status` opcional (perfis `ADMIN`, `GERENTE` e `TECNICO`; `TECNICO` não pode aprovar orçamentos). O histórico de mudanças de status fica disponível em `/historico-status`.
 
 ### Acesso do cliente
 
@@ -189,7 +188,7 @@ Usuários com perfil `CLIENTE` (vinculados a um `Cliente`) acessam suas OS via `
 | POST   | `/api/auth/me/ordens-servico/{id}/rejeitar`       | Autenticado | Rejeitar orçamento             |
 | GET    | `/api/auth/me/ordens-servico/{id}/historico-status` | Autenticado | Histórico de status          |
 
-### Clientes — `ADMIN`, `TECNICO`
+### Clientes — `ADMIN`, `GERENTE`, `TECNICO`
 
 | Método | Rota                 | Descrição        |
 |--------|----------------------|------------------|
@@ -199,7 +198,7 @@ Usuários com perfil `CLIENTE` (vinculados a um `Cliente`) acessam suas OS via `
 | PUT    | `/api/clientes/{id}` | Atualizar        |
 | DELETE | `/api/clientes/{id}` | Excluir          |
 
-### Veículos — `ADMIN`, `TECNICO`
+### Veículos — `ADMIN`, `GERENTE`, `TECNICO`
 
 | Método | Rota                            | Descrição              |
 |--------|---------------------------------|------------------------|
@@ -210,7 +209,7 @@ Usuários com perfil `CLIENTE` (vinculados a um `Cliente`) acessam suas OS via `
 | PUT    | `/api/veiculos/{id}`             | Atualizar              |
 | DELETE | `/api/veiculos/{id}`             | Excluir                |
 
-### Ordens de serviço — `ADMIN`, `TECNICO`
+### Ordens de serviço — `ADMIN`, `GERENTE`, `TECNICO`
 
 | Método | Rota                                    | Descrição              |
 |--------|-----------------------------------------|------------------------|
@@ -223,7 +222,7 @@ Usuários com perfil `CLIENTE` (vinculados a um `Cliente`) acessam suas OS via `
 | PUT    | `/api/ordens-servico/{id}`              | Atualizar              |
 | DELETE | `/api/ordens-servico/{id}`              | Excluir                |
 
-### Usuários — `ADMIN`
+### Usuários — `ADMIN`, `GERENTE`
 
 | Método | Rota                  | Descrição        |
 |--------|-----------------------|------------------|
@@ -233,7 +232,9 @@ Usuários com perfil `CLIENTE` (vinculados a um `Cliente`) acessam suas OS via `
 | PUT    | `/api/usuarios/{id}`  | Atualizar        |
 | DELETE | `/api/usuarios/{id}`  | Excluir          |
 
-### Técnicos — `ADMIN`, `TECNICO`
+> `GERENTE` não pode criar, editar, promover ou excluir usuários com perfil `ADMIN` (retorna `403`).
+
+### Técnicos — `ADMIN`, `GERENTE`, `TECNICO`
 
 | Método | Rota            | Descrição              |
 |--------|-----------------|------------------------|
@@ -253,11 +254,12 @@ Usuários com perfil `CLIENTE` (vinculados a um `Cliente`) acessam suas OS via `
 
 ### Perfis
 
-| Perfil    | Descrição                                              |
-|-----------|--------------------------------------------------------|
-| `ADMIN`   | Acesso total                                           |
-| `TECNICO` | Clientes, veículos, ordens de serviço e técnicos       |
-| `CLIENTE` | Próprias ordens de serviço (aprovar/rejeitar orçamento)|
+| Perfil    | Descrição                                                                            |
+|-----------|--------------------------------------------------------------------------------------|
+| `ADMIN`   | Acesso total                                                                         |
+| `GERENTE` | Igual ao `ADMIN`, exceto gerenciar usuários `ADMIN` (criar, editar, promover, excluir)|
+| `TECNICO` | Clientes, veículos, ordens de serviço e técnicos                                     |
+| `CLIENTE` | Próprias ordens de serviço (aprovar/rejeitar orçamento)                              |
 
 Um usuário com perfil `CLIENTE` deve estar vinculado a um registro de `Cliente` (`clienteId`).
 
@@ -350,7 +352,6 @@ Propriedades em `src/main/resources/application.properties` com suporte a variá
 | `DB_USERNAME` | Usuário PostgreSQL | `postgres` |
 | `DB_PASSWORD` | Senha PostgreSQL | `postgres` |
 | `DB_URL` | JDBC URL | `jdbc:postgresql://localhost:5432/mec` |
-| `REDIS_URL` | Valkey/Redis | `redis://localhost:6379` |
 | `JWT_SIGN_KEY_LOCATION` | Chave privada JWT | `classpath:keys/privateKey.pem` |
 | `JWT_PUBLIC_KEY_LOCATION` | Chave pública JWT | `classpath:keys/publicKey.pem` |
 | `CORS_ORIGINS` | Origens permitidas (prod) | — |

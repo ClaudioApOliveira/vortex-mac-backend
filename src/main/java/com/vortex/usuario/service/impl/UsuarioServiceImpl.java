@@ -1,5 +1,6 @@
 package com.vortex.usuario.service.impl;
 
+import com.vortex.auth.service.UsuarioAutenticadoProvider;
 import com.vortex.cliente.entity.Cliente;
 import com.vortex.cliente.repository.ClienteRepository;
 import com.vortex.shared.exception.BusinessException;
@@ -15,6 +16,7 @@ import io.quarkus.elytron.security.common.BcryptUtil;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.ForbiddenException;
 import java.util.List;
 
 @ApplicationScoped
@@ -23,15 +25,18 @@ public class UsuarioServiceImpl implements UsuarioService {
   private final UsuarioRepository usuarioRepository;
   private final ClienteRepository clienteRepository;
   private final UsuarioExclusaoService usuarioExclusaoService;
+  private final UsuarioAutenticadoProvider usuarioAutenticadoProvider;
 
   @Inject
   public UsuarioServiceImpl(
       UsuarioRepository usuarioRepository,
       ClienteRepository clienteRepository,
-      UsuarioExclusaoService usuarioExclusaoService) {
+      UsuarioExclusaoService usuarioExclusaoService,
+      UsuarioAutenticadoProvider usuarioAutenticadoProvider) {
     this.usuarioRepository = usuarioRepository;
     this.clienteRepository = clienteRepository;
     this.usuarioExclusaoService = usuarioExclusaoService;
+    this.usuarioAutenticadoProvider = usuarioAutenticadoProvider;
   }
 
   @Override
@@ -58,6 +63,7 @@ public class UsuarioServiceImpl implements UsuarioService {
   @Override
   @Transactional
   public UsuarioResponse criar(UsuarioRequest request) {
+    validarGestaoDePerfil(request.perfil());
     validarSenhaObrigatoria(request.senha(), true);
     validarEmailUnico(request.email(), null);
     validarPerfilCliente(request.perfil(), request.clienteId());
@@ -78,6 +84,8 @@ public class UsuarioServiceImpl implements UsuarioService {
   @Transactional
   public UsuarioResponse atualizar(Long id, UsuarioRequest request) {
     Usuario usuario = buscarEntidadePorId(id);
+    validarGestaoDePerfil(usuario.getPerfil());
+    validarGestaoDePerfil(request.perfil());
     validarSenhaObrigatoria(request.senha(), false);
     validarEmailUnico(request.email(), id);
     validarPerfilCliente(request.perfil(), request.clienteId());
@@ -99,6 +107,8 @@ public class UsuarioServiceImpl implements UsuarioService {
   @Override
   @Transactional
   public void excluir(Long id) {
+    Usuario usuario = buscarEntidadePorId(id);
+    validarGestaoDePerfil(usuario.getPerfil());
     usuarioExclusaoService.excluir(id);
   }
 
@@ -122,6 +132,19 @@ public class UsuarioServiceImpl implements UsuarioService {
   private void validarSenhaObrigatoria(String senha, boolean obrigatoria) {
     if (obrigatoria && (senha == null || senha.isBlank())) {
       throw new BusinessException("Senha é obrigatória");
+    }
+  }
+
+  private void validarGestaoDePerfil(Perfil perfilAlvo) {
+    boolean autenticadoEhGerente =
+        usuarioAutenticadoProvider
+            .obterUsuarioAutenticado()
+            .map(autenticado -> autenticado.getPerfil() == Perfil.GERENTE)
+            .orElse(false);
+
+    if (autenticadoEhGerente && perfilAlvo == Perfil.ADMIN) {
+      throw new ForbiddenException(
+          "Usuários com perfil GERENTE não podem gerenciar usuários ADMIN");
     }
   }
 

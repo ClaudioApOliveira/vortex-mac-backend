@@ -17,7 +17,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Path("/api/tecnicos")
 @Tag(name = "Técnicos", description = "Listagem de técnicos disponíveis para ordens de serviço")
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
-@RolesAllowed({"ADMIN", "TECNICO"})
+@RolesAllowed({"ADMIN", "GERENTE", "TECNICO"})
 @Produces(MediaType.APPLICATION_JSON)
 public class TecnicoResource {
 

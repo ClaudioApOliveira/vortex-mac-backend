@@ -18,6 +18,12 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class RefreshTokenServiceImpl implements RefreshTokenService {
 
+  /**
+   * Lazy: beans Arc são materializados no build nativo; criar SecureRandom no campo
+   * coloca seed no image heap e o GraalVM rejeita.
+   */
+  private volatile SecureRandom secureRandom;
+
   private final RefreshTokenRepository refreshTokenRepository;
 
   @ConfigProperty(name = "vortex.jwt.refresh-token.lifespan", defaultValue = "604800")
@@ -93,7 +99,20 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
   private String gerarTokenPlano() {
     byte[] bytes = new byte[32];
-    new SecureRandom().nextBytes(bytes);
+    secureRandom().nextBytes(bytes);
     return HexFormat.of().formatHex(bytes);
+  }
+
+  private SecureRandom secureRandom() {
+    SecureRandom local = secureRandom;
+    if (local == null) {
+      synchronized (this) {
+        local = secureRandom;
+        if (local == null) {
+          secureRandom = local = new SecureRandom();
+        }
+      }
+    }
+    return local;
   }
 }

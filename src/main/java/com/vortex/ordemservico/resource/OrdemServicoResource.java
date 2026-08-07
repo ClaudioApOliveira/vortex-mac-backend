@@ -1,8 +1,11 @@
 package com.vortex.ordemservico.resource;
 
+import com.vortex.ordemservico.dto.OrdemServicoFiltro;
 import com.vortex.ordemservico.dto.OrdemServicoRequest;
+import com.vortex.ordemservico.dto.OrdemServicoStatusRequest;
 import com.vortex.ordemservico.dto.OrdemServicoResponse;
 import com.vortex.ordemservico.dto.OrdemServicoStatusHistoricoResponse;
+import com.vortex.ordemservico.entity.OrdemServicoStatus;
 import com.vortex.ordemservico.service.OrdemServicoService;
 import com.vortex.shared.openapi.OpenApiConfig;
 import com.vortex.shared.response.ApiResponse;
@@ -14,6 +17,7 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
@@ -22,12 +26,13 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.time.LocalDate;
 import java.util.List;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 @Path("/api/ordens-servico")
-@Tag(name = "Ordens de Serviço", description = "CRUD de ordens de serviço com peças e serviços")
+@Tag(name = "Ordens de Serviço", description = "CRUD de ordens de serviço com peças, mão de obra e serviços terceirizados")
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @RolesAllowed({"ADMIN", "GERENTE", "TECNICO"})
 @Produces(MediaType.APPLICATION_JSON)
@@ -44,8 +49,15 @@ public class OrdemServicoResource {
   @GET
   public ApiResponse<PageResponse<OrdemServicoResponse>> listar(
       @QueryParam("page") @DefaultValue("0") int page,
-      @QueryParam("size") @DefaultValue("10") int size) {
-    return ApiResponse.ok(ordemServicoService.listarPaginado(page, size));
+      @QueryParam("size") @DefaultValue("10") int size,
+      @QueryParam("status") OrdemServicoStatus status,
+      @QueryParam("busca") String busca,
+      @QueryParam("tecnicoId") Long tecnicoId,
+      @QueryParam("dataInicio") LocalDate dataInicio,
+      @QueryParam("dataFim") LocalDate dataFim) {
+    OrdemServicoFiltro filtro =
+        new OrdemServicoFiltro(status, busca, tecnicoId, dataInicio, dataFim);
+    return ApiResponse.ok(ordemServicoService.listarPaginado(page, size, filtro));
   }
 
   @GET
@@ -86,6 +98,13 @@ public class OrdemServicoResource {
   public ApiResponse<OrdemServicoResponse> atualizar(
       @PathParam("id") Long id, @Valid OrdemServicoRequest request) {
     return ApiResponse.ok(ordemServicoService.atualizar(id, request));
+  }
+
+  @PATCH
+  @Path("/{id}/status")
+  public ApiResponse<OrdemServicoResponse> alterarStatus(
+      @PathParam("id") Long id, @Valid OrdemServicoStatusRequest request) {
+    return ApiResponse.ok(ordemServicoService.alterarStatus(id, request));
   }
 
   @DELETE

@@ -47,6 +47,7 @@ public class SessaoPostgresServiceImpl implements SessaoService {
     return !entityManager
         .createNativeQuery(BUSCAR_ATIVO)
         .setParameter("jti", jti)
+        .setMaxResults(1)
         .getResultList()
         .isEmpty();
   }

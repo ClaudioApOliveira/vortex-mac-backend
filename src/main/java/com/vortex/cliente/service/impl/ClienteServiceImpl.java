@@ -8,6 +8,8 @@ import com.vortex.cliente.repository.ClienteRepository;
 import com.vortex.cliente.service.ClienteService;
 import com.vortex.endereco.dto.EnderecoRequest;
 import com.vortex.endereco.entity.Endereco;
+import com.vortex.auth.security.RefreshTokenService;
+import com.vortex.auth.security.SessaoService;
 import com.vortex.shared.exception.BusinessException;
 import com.vortex.shared.exception.NotFoundException;
 import com.vortex.usuario.entity.Perfil;
@@ -17,23 +19,34 @@ import com.vortex.usuario.service.UsuarioExclusaoService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @ApplicationScoped
 public class ClienteServiceImpl implements ClienteService {
 
+  private static final Pattern NON_DIGIT = Pattern.compile("\\D");
+
+
   private final ClienteRepository clienteRepository;
   private final UsuarioRepository usuarioRepository;
   private final UsuarioExclusaoService usuarioExclusaoService;
+  private final RefreshTokenService refreshTokenService;
+  private final SessaoService sessaoService;
 
   @Inject
   public ClienteServiceImpl(
       ClienteRepository clienteRepository,
       UsuarioRepository usuarioRepository,
-      UsuarioExclusaoService usuarioExclusaoService) {
+      UsuarioExclusaoService usuarioExclusaoService,
+      RefreshTokenService refreshTokenService,
+      SessaoService sessaoService) {
     this.clienteRepository = clienteRepository;
     this.usuarioRepository = usuarioRepository;
     this.usuarioExclusaoService = usuarioExclusaoService;
+    this.refreshTokenService = refreshTokenService;
+    this.sessaoService = sessaoService;
   }
 
   @Override
@@ -69,6 +82,7 @@ public class ClienteServiceImpl implements ClienteService {
   @Transactional
   public ClienteResponse atualizar(Long id, ClienteRequest request) {
     Cliente cliente = buscarEntidadePorId(id);
+    validarClienteNaoAnonimizado(cliente);
     validarDadosPorTipoPessoa(request);
     validarDocumentoUnico(request, id);
 
@@ -95,6 +109,58 @@ public class ClienteServiceImpl implements ClienteService {
     }
 
     clienteRepository.delete(cliente);
+  }
+
+
+  @Override
+  @Transactional
+  public ClienteResponse anonimizar(Long id) {
+    Cliente cliente = buscarEntidadePorId(id);
+    Usuario usuario = cliente.getUsuario();
+    if (usuario != null && usuario.getLgpdAnonimizadoEm() != null) {
+      return ClienteResponse.from(cliente);
+    }
+
+    String rotulo = "Cliente removido #" + cliente.getId();
+    cliente.setNome(rotulo);
+    cliente.setCpf(null);
+    cliente.setCnpj(null);
+    cliente.setRazaoSocial(null);
+    cliente.setNomeFantasia(null);
+    cliente.setTelefone(null);
+    cliente.setEndereco(null);
+
+    if (usuario != null) {
+      String emailAnon = "anonimizado+" + usuario.getId() + "@lgpd.local";
+      usuario.setNome(rotulo);
+      usuario.setEmail(emailAnon);
+      usuario.setSenha(null);
+      usuario.setDeveDefinirSenha(false);
+      usuario.setAtivo(false);
+      usuario.setLgpdAnonimizadoEm(LocalDateTime.now());
+      if (usuario.getLgpdExclusaoSolicitadaEm() == null) {
+        usuario.setLgpdExclusaoSolicitadaEm(LocalDateTime.now());
+      }
+      refreshTokenService.revogarTodosPorUsuario(usuario.getId());
+      sessaoService.invalidarAccessPorUsuario(usuario.getId());
+    }
+
+    return ClienteResponse.from(cliente);
+  }
+
+  @Override
+  @Transactional
+  public List<ClienteResponse> listarSolicitacoesExclusao() {
+    return clienteRepository.findSolicitacoesExclusao().stream()
+        .map(ClienteResponse::from)
+        .toList();
+  }
+
+  private void validarClienteNaoAnonimizado(Cliente cliente) {
+    Usuario usuario = cliente.getUsuario();
+    if (usuario != null && usuario.getLgpdAnonimizadoEm() != null) {
+      throw new BusinessException("Cliente anonimizado não pode ser alterado.");
+    }
   }
 
   public Cliente buscarEntidadePorId(Long id) {
@@ -240,7 +306,7 @@ public class ClienteServiceImpl implements ClienteService {
     if (cep == null) {
       return null;
     }
-    String apenasDigitos = cep.replaceAll("\\D", "");
+    String apenasDigitos = NON_DIGIT.matcher(cep).replaceAll("");
     if (apenasDigitos.length() != 8) {
       return cep;
     }
@@ -251,7 +317,7 @@ public class ClienteServiceImpl implements ClienteService {
     if (cpf == null) {
       return null;
     }
-    String apenasDigitos = cpf.replaceAll("\\D", "");
+    String apenasDigitos = NON_DIGIT.matcher(cpf).replaceAll("");
     if (apenasDigitos.length() != 11) {
       return cpf;
     }
@@ -268,7 +334,7 @@ public class ClienteServiceImpl implements ClienteService {
     if (cnpj == null) {
       return null;
     }
-    String apenasDigitos = cnpj.replaceAll("\\D", "");
+    String apenasDigitos = NON_DIGIT.matcher(cnpj).replaceAll("");
     if (apenasDigitos.length() != 14) {
       return cnpj;
     }

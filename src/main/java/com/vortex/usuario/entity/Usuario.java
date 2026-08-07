@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "usuarios")
@@ -43,6 +44,18 @@ public class Usuario extends Auditoria {
 
   @Column(nullable = false)
   private boolean ativo = true;
+
+  @Column(name = "lgpd_aceite_em")
+  private LocalDateTime lgpdAceiteEm;
+
+  @Column(name = "lgpd_aceite_versao", length = 20)
+  private String lgpdAceiteVersao;
+
+  @Column(name = "lgpd_exclusao_solicitada_em")
+  private LocalDateTime lgpdExclusaoSolicitadaEm;
+
+  @Column(name = "lgpd_anonimizado_em")
+  private LocalDateTime lgpdAnonimizadoEm;
 
   public Long getId() {
     return id;
@@ -106,5 +119,37 @@ public class Usuario extends Auditoria {
 
   public void setAtivo(boolean ativo) {
     this.ativo = ativo;
+  }
+
+  public LocalDateTime getLgpdAceiteEm() {
+    return lgpdAceiteEm;
+  }
+
+  public void setLgpdAceiteEm(LocalDateTime lgpdAceiteEm) {
+    this.lgpdAceiteEm = lgpdAceiteEm;
+  }
+
+  public String getLgpdAceiteVersao() {
+    return lgpdAceiteVersao;
+  }
+
+  public void setLgpdAceiteVersao(String lgpdAceiteVersao) {
+    this.lgpdAceiteVersao = lgpdAceiteVersao;
+  }
+
+  public LocalDateTime getLgpdExclusaoSolicitadaEm() {
+    return lgpdExclusaoSolicitadaEm;
+  }
+
+  public void setLgpdExclusaoSolicitadaEm(LocalDateTime lgpdExclusaoSolicitadaEm) {
+    this.lgpdExclusaoSolicitadaEm = lgpdExclusaoSolicitadaEm;
+  }
+
+  public LocalDateTime getLgpdAnonimizadoEm() {
+    return lgpdAnonimizadoEm;
+  }
+
+  public void setLgpdAnonimizadoEm(LocalDateTime lgpdAnonimizadoEm) {
+    this.lgpdAnonimizadoEm = lgpdAnonimizadoEm;
   }
 }

@@ -29,7 +29,7 @@ public class Veiculo extends Auditoria {
   private String modelo;
 
   @Column(name = "ano_fabricacao", nullable = false)
-  private Integer anoFabricacao;
+  private int anoFabricacao;
 
   @Column(length = 30)
   private String motor;
@@ -76,11 +76,11 @@ public class Veiculo extends Auditoria {
     this.modelo = modelo;
   }
 
-  public Integer getAnoFabricacao() {
+  public int getAnoFabricacao() {
     return anoFabricacao;
   }
 
-  public void setAnoFabricacao(Integer anoFabricacao) {
+  public void setAnoFabricacao(int anoFabricacao) {
     this.anoFabricacao = anoFabricacao;
   }
 

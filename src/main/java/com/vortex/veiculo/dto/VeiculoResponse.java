@@ -8,7 +8,7 @@ public record VeiculoResponse(
     String placa,
     String marca,
     String modelo,
-    Integer anoFabricacao,
+    int anoFabricacao,
     String motor,
     String combustivel,
     Integer kmAtual,

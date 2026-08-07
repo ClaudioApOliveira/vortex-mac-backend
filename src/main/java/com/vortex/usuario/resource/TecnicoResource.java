@@ -15,7 +15,7 @@ import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 @Path("/api/tecnicos")
-@Tag(name = "Técnicos", description = "Listagem de técnicos disponíveis para ordens de serviço")
+@Tag(name = "Responsáveis", description = "Listagem de técnicos e gerentes disponíveis como responsáveis da OS")
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @RolesAllowed({"ADMIN", "GERENTE", "TECNICO"})
 @Produces(MediaType.APPLICATION_JSON)

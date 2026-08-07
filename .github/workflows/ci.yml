@@ -9,45 +9,75 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOCKER_IMAGE: oliveiraclaudio/vortex-mec-backend
+  JAVA_VERSION: '25'
+
 jobs:
-  test-and-native-build:
-    name: Testes e build nativo
+  test:
+    name: Testes
     runs-on: self-hosted
-    environment: DOCKERHUB
 
     env:
       MAVEN_OPTS: -Xmx1536m
-      QUARKUS_PROFILE: prod
-      DOCKER_IMAGE: oliveiraclaudio/vortex-mec-backend
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Configurar GraalVM 25
+      - name: Configurar JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Testes unitários
+        run: |
+          set -euo pipefail
+          ./mvnw test -DskipITs --batch-mode
+
+  native:
+    name: Build nativo
+    runs-on: self-hosted
+    needs: test
+
+    env:
+      QUARKUS_PROFILE: prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configurar GraalVM ${{ env.JAVA_VERSION }}
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '25'
+          java-version: ${{ env.JAVA_VERSION }}
           distribution: graalvm-community
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cache: maven
 
-      - name: Preparar e testar
-        shell: bash
+      - name: Gerar chaves JWT
         run: |
           set -euo pipefail
           chmod +x ./scripts/gerar-chaves-jwt.sh
           ./scripts/gerar-chaves-jwt.sh
-          ./mvnw test -DskipITs --batch-mode
 
       - name: Verificar dependências do build nativo (Ubuntu)
-        shell: bash
         run: |
           set -euo pipefail
 
+          # zlib1g-dev: precisa estar no host (native-image). Sem sudo, falha com instrução clara.
           if dpkg -s zlib1g-dev >/dev/null 2>&1; then
             echo "zlib1g-dev já instalado."
-          elif [ "$(id -u)" -eq 0 ]; then
+            exit 0
+          fi
+
+          if [ "$(id -u)" -eq 0 ]; then
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends zlib1g-dev
           elif sudo -n true 2>/dev/null; then
@@ -55,13 +85,12 @@ jobs:
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends zlib1g-dev
           else
             echo "Erro: zlib1g-dev não está instalado e o runner não tem sudo sem senha."
-            echo "Instale uma vez no servidor Ubuntu do runner:"
+            echo "Instale uma vez no servidor do runner:"
             echo "  sudo apt-get update && sudo apt-get install -y zlib1g-dev"
             exit 1
           fi
 
       - name: Build nativo
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -104,6 +133,11 @@ jobs:
           echo "GraalVM args: ${NATIVE_ARGS}"
           free -h
 
+          # Sem UPX: compressão corta o tamanho da imagem, mas descomprime o binário na RAM
+          # em runtime (~+50–80 MB RSS ocioso). Priorizamos memória no servidor da oficina.
+          # Cap do heap managed do native (~RSS total ainda inclui image heap + stacks).
+          NATIVE_ARGS="${NATIVE_ARGS},-R:MaxHeapSize=64m"
+
           ./mvnw package -Dnative -DskipTests --batch-mode \
             -Dquarkus.native.native-image-xmx="${NATIVE_GB}g" \
             -Dquarkus.native.additional-build-args="${NATIVE_ARGS}"
@@ -112,9 +146,41 @@ jobs:
           test -f "$BINARY"
           chmod +x "$BINARY"
           ls -lh "$BINARY"
+          file "$BINARY" || true
 
-      - name: Build imagem Docker
-        shell: bash
+      - name: Publicar binário nativo
+        uses: actions/upload-artifact@v5
+        with:
+          name: native-runner
+          path: target/*-runner
+          if-no-files-found: error
+          retention-days: 7
+
+  docker:
+    name: Docker
+    runs-on: self-hosted
+    needs: native
+    environment: DOCKERHUB
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Baixar binário nativo
+        uses: actions/download-artifact@v5
+        with:
+          name: native-runner
+          path: target
+
+      - name: Preparar binário
+        run: |
+          set -euo pipefail
+          BINARY="$(find target -maxdepth 1 -type f -name '*-runner' | head -n 1)"
+          test -n "$BINARY"
+          chmod +x "$BINARY"
+          ls -lh "$BINARY"
+
+      - name: Build imagem
         run: |
           set -euo pipefail
           docker build \
@@ -133,13 +199,22 @@ jobs:
           exit-code: '1'
           format: table
 
-      - name: Push imagem Docker Hub
-        shell: bash
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push imagem
         run: |
           set -euo pipefail
-          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          SHORT_SHA="${GITHUB_SHA::7}"
+          docker tag "${DOCKER_IMAGE}:${GITHUB_SHA}" "${DOCKER_IMAGE}:${SHORT_SHA}"
           docker push "${DOCKER_IMAGE}:${GITHUB_SHA}"
+          docker push "${DOCKER_IMAGE}:${SHORT_SHA}"
           docker push "${DOCKER_IMAGE}:latest"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker image prune -f || true

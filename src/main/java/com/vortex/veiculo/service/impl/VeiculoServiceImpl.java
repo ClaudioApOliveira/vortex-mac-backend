@@ -13,9 +13,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @ApplicationScoped
 public class VeiculoServiceImpl implements VeiculoService {
+
+  private static final Pattern NON_WORD = Pattern.compile("\\W");
+
 
   private final VeiculoRepository veiculoRepository;
   private final ClienteRepository clienteRepository;
@@ -117,6 +121,6 @@ public class VeiculoServiceImpl implements VeiculoService {
   }
 
   private String normalizarPlaca(String placa) {
-    return placa.replaceAll("\\W", "").toUpperCase();
+    return NON_WORD.matcher(placa).replaceAll("").toUpperCase();
   }
 }

@@ -294,17 +294,15 @@ Os testes usam H2 em memória com o schema em `src/test/resources/schema.sql` e 
 
 ## CI
 
-A pipeline (`.github/workflows/ci.yml`) dispara em **pull requests** e **push para `main`**, em runner **self-hosted Linux** com GraalVM 25:
+A pipeline (`.github/workflows/ci.yml`) dispara **somente no push/merge para `main`**, em runner **self-hosted Linux**. Jobs separados:
 
-1. Testes unitários
-2. Scan de dependências (Trivy — bloqueia CRITICAL e HIGH)
-3. Build nativo (`./mvnw package -Dnative`)
-4. Build da imagem Docker (`src/main/docker/Dockerfile.native-micro`)
-5. Scan da imagem (Trivy)
-6. Push para Docker Hub (`oliveiraclaudio/vortex-mec-backend`, repositório privado)
-7. Publicação do binário nativo como artefato (7 dias)
+| Job | O que faz |
+|-----|-----------|
+| **Testes** | JDK Temurin 25 + `./mvnw test` |
+| **Build nativo** | GraalVM 25, JWT, `package -Dnative` (sem UPX; heap cap 64m), artefato `native-runner` (7 dias) |
+| **Docker** | Monta a imagem a partir do artefato, scan Trivy (CRITICAL/HIGH), push no Docker Hub |
 
-Chaves JWT são geradas no CI via `scripts/gerar-chaves-jwt.sh`.
+Chaves JWT de produção no binário vêm de `scripts/gerar-chaves-jwt.sh` (só no job nativo).
 
 ### Secrets no GitHub
 
@@ -315,7 +313,7 @@ Crie o environment **`DOCKERHUB`** em **Settings → Environments** e adicione o
 | `DOCKERHUB_USERNAME` | Usuário Docker Hub (`oliveiraclaudio`) |
 | `DOCKERHUB_TOKEN` | Access Token do Docker Hub (não use a senha da conta) |
 
-O job do workflow referencia `environment: DOCKERHUB` para acessar esses secrets.
+Só o job **Docker** usa o environment `DOCKERHUB`.
 
 Crie o token em [Docker Hub → Account Settings → Security → Access Tokens](https://hub.docker.com/settings/security).
 
@@ -323,8 +321,7 @@ Crie o token em [Docker Hub → Account Settings → Security → Access Tokens]
 
 | Evento | Tags |
 |--------|------|
-| Pull request | `<sha>`, `pr-<número>` |
-| Push em `main` | `<sha>`, `latest` |
+| Merge/push em `main` | `<sha>`, `<sha curto>`, `latest` |
 
 ## Build
 
@@ -338,10 +335,15 @@ java -jar target/quarkus-app/quarkus-run.jar
 # Executável nativo (requer GraalVM 25 + native-image)
 ./mvnw package -Dnative
 
-# Imagem Docker nativa (após o build nativo)
+# Com compressão UPX (opcional — menor imagem, maior RSS; CI não usa)
+./mvnw package -Dnative -Dquarkus.native.compression.level=7
+
+# Imagem Docker nativa (após o build nativo) — base ubi9-quarkus-micro (~10MB) + runner
 docker build -f src/main/docker/Dockerfile.native-micro -t mec-backend .
 docker run -i --rm -p 8080:8080 mec-backend
 ```
+
+A imagem final já usa a base mais enxuta do Quarkus. O CI **não** usa UPX (corta tamanho no registry, mas sobe ~50–80 MB de RSS ocioso). Evite `scratch`/estático (`--libc=musl`) em produção sem testes extras (DNS/libc).
 
 ## Configuração
 
@@ -362,4 +364,4 @@ Propriedades em `src/main/resources/application.properties` com suporte a variá
 ./mvnw package -Dquarkus.profile=prod
 ```
 
-Configure todas as variáveis obrigatórias listadas em `application-prod.properties` (sem valores padrão). O Swagger fica desabilitado e rotas `/q/*` não são públicas.
+Configure todas as variáveis obrigatórias listadas em `application-prod.properties` (sem valores padrão). OpenAPI/Swagger ficam desabilitados e rotas `/q/*` não são públicas.

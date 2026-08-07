@@ -15,6 +15,8 @@ public interface UsuarioRepository {
 
   List<Usuario> findByPerfil(Perfil perfil);
 
+  List<Usuario> findByPerfis(List<Perfil> perfis);
+
   void delete(Usuario usuario);
 
   Optional<Usuario> findByEmail(String email);

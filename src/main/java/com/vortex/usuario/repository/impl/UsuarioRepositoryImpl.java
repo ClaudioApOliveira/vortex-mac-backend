@@ -26,11 +26,14 @@ public class UsuarioRepositoryImpl implements UsuarioRepository {
 
   @Override
   public Optional<Usuario> findById(Long id) {
-    return entityManager
-        .createNativeQuery(UsuarioQuery.BUSCAR_POR_ID.getSql(), Usuario.class)
-        .setParameter("id", id)
-        .getResultStream()
-        .findFirst();
+    @SuppressWarnings("unchecked")
+    List<Usuario> results =
+        entityManager
+            .createNativeQuery(UsuarioQuery.BUSCAR_POR_ID.getSql(), Usuario.class)
+            .setParameter("id", id)
+            .setMaxResults(1)
+            .getResultList();
+    return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
   }
 
   @Override
@@ -51,6 +54,16 @@ public class UsuarioRepositoryImpl implements UsuarioRepository {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
+  public List<Usuario> findByPerfis(List<Perfil> perfis) {
+    List<String> nomes = perfis.stream().map(Perfil::name).toList();
+    return entityManager
+        .createNativeQuery(UsuarioQuery.LISTAR_POR_PERFIS.getSql(), Usuario.class)
+        .setParameter("perfis", nomes)
+        .getResultList();
+  }
+
+  @Override
   public void delete(Usuario usuario) {
     Usuario managed = entityManager.contains(usuario) ? usuario : entityManager.merge(usuario);
     entityManager.remove(managed);
@@ -58,11 +71,14 @@ public class UsuarioRepositoryImpl implements UsuarioRepository {
 
   @Override
   public Optional<Usuario> findByEmail(String email) {
-    return entityManager
-        .createNativeQuery(UsuarioQuery.BUSCAR_POR_EMAIL.getSql(), Usuario.class)
-        .setParameter("email", email)
-        .getResultStream()
-        .findFirst();
+    @SuppressWarnings("unchecked")
+    List<Usuario> results =
+        entityManager
+            .createNativeQuery(UsuarioQuery.BUSCAR_POR_EMAIL.getSql(), Usuario.class)
+            .setParameter("email", email)
+            .setMaxResults(1)
+            .getResultList();
+    return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
   }
 
   @Override

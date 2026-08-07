@@ -46,6 +46,23 @@ public class ClienteResource {
   }
 
   @GET
+  @Path("/solicitacoes-exclusao")
+  @RolesAllowed({"ADMIN", "GERENTE"})
+  public ApiResponse<List<ClienteResponse>> listarSolicitacoesExclusao() {
+    LOG.info("Listando solicitações de exclusão LGPD");
+    return ApiResponse.ok(clienteService.listarSolicitacoesExclusao());
+  }
+
+  @POST
+  @Path("/{id}/anonimizar")
+  @RolesAllowed({"ADMIN", "GERENTE"})
+  public ApiResponse<ClienteResponse> anonimizar(@PathParam("id") Long id) {
+    LOG.info("Anonimizando cliente id=" + id);
+    return ApiResponse.ok(
+        "Dados pessoais anonimizados com sucesso", clienteService.anonimizar(id));
+  }
+
+  @GET
   @Path("/{id}")
   public ApiResponse<ClienteResponse> buscar(@PathParam("id") Long id) {
     LOG.info("Buscando cliente por ID: " + id);

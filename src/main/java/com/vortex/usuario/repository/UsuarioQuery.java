@@ -4,6 +4,8 @@ public enum UsuarioQuery {
   BUSCAR_POR_ID("SELECT * FROM usuarios WHERE id = :id"),
   LISTAR_TODOS("SELECT * FROM usuarios"),
   LISTAR_POR_PERFIL("SELECT * FROM usuarios WHERE perfil = :perfil AND ativo = TRUE ORDER BY nome"),
+  LISTAR_POR_PERFIS(
+      "SELECT * FROM usuarios WHERE perfil IN (:perfis) AND ativo = TRUE ORDER BY nome"),
   BUSCAR_POR_EMAIL("SELECT * FROM usuarios WHERE email = :email"),
   CONTAR_POR_EMAIL("SELECT COUNT(*) FROM usuarios WHERE email = :email"),
   CONTAR_POR_EMAIL_E_ID_DIFERENTE(

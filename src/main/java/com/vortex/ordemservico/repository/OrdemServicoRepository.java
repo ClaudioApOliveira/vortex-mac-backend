@@ -1,5 +1,6 @@
 package com.vortex.ordemservico.repository;
 
+import com.vortex.ordemservico.dto.OrdemServicoFiltro;
 import com.vortex.ordemservico.entity.OrdemServico;
 import java.util.List;
 import java.util.Optional;
@@ -15,6 +16,10 @@ public interface OrdemServicoRepository {
   List<OrdemServico> findAllPaginated(int page, int size);
 
   long countAll();
+
+  List<OrdemServico> findFiltered(OrdemServicoFiltro filtro, int page, int size);
+
+  long countFiltered(OrdemServicoFiltro filtro);
 
   List<OrdemServico> findByClienteId(Long clienteId);
 

@@ -11,6 +11,12 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 public class AuthCsrfService {
 
+  /**
+   * Lazy: beans Arc são materializados no build nativo; criar SecureRandom no campo
+   * coloca seed no image heap e o GraalVM rejeita.
+   */
+  private volatile SecureRandom secureRandom;
+
   @ConfigProperty(name = "vortex.auth.csrf.enabled", defaultValue = "true")
   boolean enabled;
 
@@ -43,8 +49,21 @@ public class AuthCsrfService {
 
   public String gerarToken() {
     byte[] bytes = new byte[32];
-    new SecureRandom().nextBytes(bytes);
+    secureRandom().nextBytes(bytes);
     return HexFormat.of().formatHex(bytes);
+  }
+
+  private SecureRandom secureRandom() {
+    SecureRandom local = secureRandom;
+    if (local == null) {
+      synchronized (this) {
+        local = secureRandom;
+        if (local == null) {
+          secureRandom = local = new SecureRandom();
+        }
+      }
+    }
+    return local;
   }
 
   public NewCookie criarCookie(String token) {

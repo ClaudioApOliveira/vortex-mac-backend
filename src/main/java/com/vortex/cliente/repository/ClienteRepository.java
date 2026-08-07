@@ -12,6 +12,8 @@ public interface ClienteRepository {
 
   List<Cliente> findAll();
 
+  List<Cliente> findSolicitacoesExclusao();
+
   void delete(Cliente cliente);
 
   Optional<Cliente> findByCpf(String cpf);

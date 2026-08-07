@@ -42,13 +42,17 @@ public class UsuarioServiceImpl implements UsuarioService {
   @Override
   @Transactional
   public List<UsuarioResponse> listarTodos() {
-    return usuarioRepository.findAll().stream().map(UsuarioResponse::from).toList();
+    boolean podeVerAdmins = autenticadoPodeVerAdmins();
+    return usuarioRepository.findAll().stream()
+        .filter(usuario -> podeVerAdmins || usuario.getPerfil() != Perfil.ADMIN)
+        .map(UsuarioResponse::from)
+        .toList();
   }
 
   @Override
   @Transactional
   public List<UsuarioResponse> listarTecnicos() {
-    return usuarioRepository.findByPerfil(Perfil.TECNICO).stream()
+    return usuarioRepository.findByPerfis(List.of(Perfil.TECNICO, Perfil.GERENTE)).stream()
         .map(UsuarioResponse::from)
         .toList();
   }
@@ -57,6 +61,7 @@ public class UsuarioServiceImpl implements UsuarioService {
   @Transactional
   public UsuarioResponse buscarPorId(Long id) {
     Usuario usuario = buscarEntidadePorId(id);
+    validarVisibilidadeUsuario(usuario);
     return UsuarioResponse.from(usuario);
   }
 
@@ -136,16 +141,23 @@ public class UsuarioServiceImpl implements UsuarioService {
   }
 
   private void validarGestaoDePerfil(Perfil perfilAlvo) {
-    boolean autenticadoEhGerente =
-        usuarioAutenticadoProvider
-            .obterUsuarioAutenticado()
-            .map(autenticado -> autenticado.getPerfil() == Perfil.GERENTE)
-            .orElse(false);
-
-    if (autenticadoEhGerente && perfilAlvo == Perfil.ADMIN) {
+    if (!autenticadoPodeVerAdmins() && perfilAlvo == Perfil.ADMIN) {
       throw new ForbiddenException(
-          "Usuários com perfil GERENTE não podem gerenciar usuários ADMIN");
+          "Somente administradores podem gerenciar usuários ADMIN");
     }
+  }
+
+  private void validarVisibilidadeUsuario(Usuario usuario) {
+    if (!autenticadoPodeVerAdmins() && usuario.getPerfil() == Perfil.ADMIN) {
+      throw new NotFoundException("Usuário não encontrado com id: " + usuario.getId());
+    }
+  }
+
+  private boolean autenticadoPodeVerAdmins() {
+    return usuarioAutenticadoProvider
+        .obterUsuarioAutenticado()
+        .map(autenticado -> autenticado.getPerfil() == Perfil.ADMIN)
+        .orElse(false);
   }
 
   private void validarPerfilCliente(Perfil perfil, Long clienteId) {

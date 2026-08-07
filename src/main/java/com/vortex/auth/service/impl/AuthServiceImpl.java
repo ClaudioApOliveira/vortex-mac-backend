@@ -1,6 +1,8 @@
 package com.vortex.auth.service.impl;
 
 import com.vortex.auth.dto.AlterarSenhaRequest;
+import com.vortex.auth.dto.DadosPessoaisExportResponse;
+import com.vortex.auth.dto.LgpdAceiteRequest;
 import com.vortex.auth.dto.AtualizarPerfilRequest;
 import com.vortex.auth.dto.LoginRequest;
 import com.vortex.auth.dto.PrimeiroAcessoRequest;
@@ -16,10 +18,13 @@ import com.vortex.auth.security.SessaoService;
 import com.vortex.auth.service.AuthEmailRateLimitService;
 import com.vortex.auth.service.AuthService;
 import com.vortex.auth.service.AuthTokenWriter;
+import com.vortex.cliente.dto.ClienteResponse;
 import com.vortex.cliente.entity.Cliente;
 import com.vortex.ordemservico.dto.OrdemServicoResponse;
 import com.vortex.ordemservico.dto.OrdemServicoStatusHistoricoResponse;
 import com.vortex.ordemservico.service.OrdemServicoService;
+import com.vortex.veiculo.service.VeiculoService;
+import com.vortex.shared.lgpd.LgpdConstants;
 import com.vortex.shared.exception.BusinessException;
 import com.vortex.shared.exception.UnauthorizedException;
 import com.vortex.shared.response.PageResponse;
@@ -31,6 +36,7 @@ import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
@@ -44,6 +50,7 @@ public class AuthServiceImpl implements AuthService {
   private final RefreshTokenService refreshTokenService;
   private final SessaoService sessaoService;
   private final OrdemServicoService ordemServicoService;
+  private final VeiculoService veiculoService;
   private final AuthTokenWriter authTokenWriter;
   private final AuthEmailRateLimitService authEmailRateLimitService;
   private final JsonWebToken jwt;
@@ -55,6 +62,7 @@ public class AuthServiceImpl implements AuthService {
       RefreshTokenService refreshTokenService,
       SessaoService sessaoService,
       OrdemServicoService ordemServicoService,
+      VeiculoService veiculoService,
       AuthTokenWriter authTokenWriter,
       AuthEmailRateLimitService authEmailRateLimitService,
       JsonWebToken jwt,
@@ -63,6 +71,7 @@ public class AuthServiceImpl implements AuthService {
     this.refreshTokenService = refreshTokenService;
     this.sessaoService = sessaoService;
     this.ordemServicoService = ordemServicoService;
+    this.veiculoService = veiculoService;
     this.authTokenWriter = authTokenWriter;
     this.authEmailRateLimitService = authEmailRateLimitService;
     this.jwt = jwt;
@@ -73,7 +82,7 @@ public class AuthServiceImpl implements AuthService {
   public TokensGerados autenticar(LoginRequest request) {
     authEmailRateLimitService.verificarLimite("login", request.email());
     Usuario usuario = buscarUsuarioAtivo(request.email(), request.senha());
-    return authTokenWriter.gerarTokens(usuario.getId());
+    return authTokenWriter.gerarTokens(usuario);
   }
 
   @Override
@@ -91,13 +100,24 @@ public class AuthServiceImpl implements AuthService {
   }
 
   @Override
+  @Transactional
   public TokensGerados definirSenhaPrimeiroAcesso(PrimeiroAcessoRequest request) {
     authEmailRateLimitService.verificarLimite("primeiro-acesso", request.email());
     if (!request.senha().equals(request.confirmarSenha())) {
       throw new BusinessException("As senhas não conferem");
     }
+    if (!request.lgpdAceite()) {
+      throw new BusinessException("É necessário aceitar a Política de Privacidade");
+    }
+    if (!LgpdConstants.POLITICA_VERSAO.equals(request.lgpdAceiteVersao())) {
+      throw new BusinessException("Versão da Política de Privacidade inválida");
+    }
 
     Usuario usuario = buscarUsuarioElegivelPrimeiroAcesso(request.email());
+    usuario.setLgpdAceiteEm(LocalDateTime.now());
+    usuario.setLgpdAceiteVersao(request.lgpdAceiteVersao());
+    usuarioRepository.save(usuario);
+
     String senhaHash = BcryptUtil.bcryptHash(request.senha());
     return authTokenWriter.definirSenhaEGerarTokens(usuario.getId(), senhaHash);
   }
@@ -111,7 +131,7 @@ public class AuthServiceImpl implements AuthService {
       throw new UnauthorizedException(AuthMessages.REFRESH_TOKEN_INVALIDO);
     }
 
-    return authTokenWriter.gerarTokens(usuario.getId());
+    return authTokenWriter.gerarTokens(usuario);
   }
 
   @Override
@@ -211,6 +231,59 @@ public class AuthServiceImpl implements AuthService {
         obterUsuarioIdAutenticado(), id);
   }
 
+
+  @Override
+  @Transactional
+  public DadosPessoaisExportResponse exportarMeusDadosPessoais() {
+    Usuario usuario = obterUsuarioAutenticadoEntidade();
+    Cliente cliente = usuario.getCliente();
+    ClienteResponse clienteResponse = cliente != null ? ClienteResponse.from(cliente) : null;
+    java.util.List<com.vortex.veiculo.dto.VeiculoResponse> veiculos =
+        cliente != null
+            ? veiculoService.listarPorCliente(cliente.getId())
+            : java.util.List.of();
+    java.util.List<OrdemServicoResponse> ordens =
+        ordemServicoService.listarPorUsuarioCliente(usuario.getId());
+
+    return new DadosPessoaisExportResponse(
+        LocalDateTime.now(),
+        LgpdConstants.POLITICA_VERSAO,
+        montarUsuarioAutenticadoResponse(usuario),
+        clienteResponse,
+        veiculos,
+        ordens);
+  }
+
+  @Override
+  @Transactional
+  public UsuarioAutenticadoResponse registrarLgpdAceite(LgpdAceiteRequest request) {
+    if (!request.lgpdAceite()) {
+      throw new BusinessException("É necessário aceitar a Política de Privacidade");
+    }
+    if (!LgpdConstants.POLITICA_VERSAO.equals(request.lgpdAceiteVersao())) {
+      throw new BusinessException("Versão da Política de Privacidade inválida");
+    }
+
+    Usuario usuario = obterUsuarioAutenticadoEntidade();
+    usuario.setLgpdAceiteEm(LocalDateTime.now());
+    usuario.setLgpdAceiteVersao(request.lgpdAceiteVersao());
+    return montarUsuarioAutenticadoResponse(usuario);
+  }
+
+  @Override
+  @Transactional
+  public UsuarioAutenticadoResponse solicitarExclusaoDados() {
+    Usuario usuario = obterUsuarioAutenticadoEntidade();
+    if (usuario.getLgpdAnonimizadoEm() != null) {
+      throw new BusinessException("Dados já foram anonimizados.");
+    }
+    if (usuario.getLgpdExclusaoSolicitadaEm() != null) {
+      return montarUsuarioAutenticadoResponse(usuario);
+    }
+    usuario.setLgpdExclusaoSolicitadaEm(LocalDateTime.now());
+    return montarUsuarioAutenticadoResponse(usuario);
+  }
+
   private UsuarioAutenticadoResponse montarUsuarioAutenticadoResponse(Usuario usuario) {
     Long clienteId = usuario.getCliente() != null ? usuario.getCliente().getId() : null;
 
@@ -220,7 +293,11 @@ public class AuthServiceImpl implements AuthService {
         usuario.getNome(),
         usuario.getPerfil(),
         clienteId,
-        usuario.isDeveDefinirSenha());
+        usuario.isDeveDefinirSenha(),
+        usuario.getLgpdAceiteEm(),
+        usuario.getLgpdAceiteVersao(),
+        usuario.getLgpdExclusaoSolicitadaEm(),
+        usuario.getLgpdAnonimizadoEm());
   }
 
   private long obterUsuarioIdAutenticado() {

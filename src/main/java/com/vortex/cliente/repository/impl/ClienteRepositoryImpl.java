@@ -25,14 +25,16 @@ public class ClienteRepositoryImpl implements ClienteRepository {
 
   @Override
   public Optional<Cliente> findById(Long id) {
-    return entityManager
-        .createQuery(
-            "SELECT c FROM Cliente c LEFT JOIN FETCH c.endereco LEFT JOIN FETCH c.usuario WHERE"
-                + " c.id = :id",
-            Cliente.class)
-        .setParameter("id", id)
-        .getResultStream()
-        .findFirst();
+    List<Cliente> results =
+        entityManager
+            .createQuery(
+                "SELECT c FROM Cliente c LEFT JOIN FETCH c.endereco LEFT JOIN FETCH c.usuario WHERE"
+                    + " c.id = :id",
+                Cliente.class)
+            .setParameter("id", id)
+            .setMaxResults(1)
+            .getResultList();
+    return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
   }
 
   @Override
@@ -41,6 +43,17 @@ public class ClienteRepositoryImpl implements ClienteRepository {
     return entityManager
         .createQuery(
             "SELECT c FROM Cliente c LEFT JOIN FETCH c.endereco LEFT JOIN FETCH c.usuario",
+            Cliente.class)
+        .getResultList();
+  }
+
+  
+  @Override
+  public List<Cliente> findSolicitacoesExclusao() {
+    return entityManager
+        .createQuery(
+            "SELECT c FROM Cliente c LEFT JOIN FETCH c.endereco LEFT JOIN FETCH c.usuario u"
+                + " WHERE u.lgpdExclusaoSolicitadaEm IS NOT NULL AND u.lgpdAnonimizadoEm IS NULL",
             Cliente.class)
         .getResultList();
   }

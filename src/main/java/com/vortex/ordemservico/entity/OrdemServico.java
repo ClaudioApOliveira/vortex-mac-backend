@@ -70,6 +70,9 @@ public class OrdemServico extends Auditoria {
   @Column(name = "descricao_mao_de_obra", length = 500)
   private String descricaoMaoDeObra;
 
+  @Column(name = "diagnostico_inicial", columnDefinition = "TEXT")
+  private String diagnosticoInicial;
+
   @Column(name = "preco_total", nullable = false, precision = 12, scale = 2)
   private BigDecimal precoTotal = BigDecimal.ZERO;
 
@@ -182,6 +185,14 @@ public class OrdemServico extends Auditoria {
 
   public void setDescricaoMaoDeObra(String descricaoMaoDeObra) {
     this.descricaoMaoDeObra = descricaoMaoDeObra;
+  }
+
+  public String getDiagnosticoInicial() {
+    return diagnosticoInicial;
+  }
+
+  public void setDiagnosticoInicial(String diagnosticoInicial) {
+    this.diagnosticoInicial = diagnosticoInicial;
   }
 
   public BigDecimal getPrecoTotal() {

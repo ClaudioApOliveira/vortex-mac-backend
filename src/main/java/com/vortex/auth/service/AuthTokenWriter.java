@@ -65,7 +65,7 @@ public class AuthTokenWriter {
     return gerarTokens(usuario);
   }
 
-  private TokensGerados gerarTokens(Usuario usuario) {
+  public TokensGerados gerarTokens(Usuario usuario) {
     Long clienteId = usuario.getCliente() != null ? usuario.getCliente().getId() : null;
     AccessTokenGerado accessTokenGerado =
         jwtService.gerarToken(

@@ -63,7 +63,9 @@ class ClienteResourceTest {
             Map.of(
                 "email", email,
                 "senha", "senha1234",
-                "confirmarSenha", "senha1234"))
+                "confirmarSenha", "senha1234",
+                "lgpdAceite", true,
+                "lgpdAceiteVersao", "1.0"))
         .when()
         .post("/api/auth/primeiro-acesso")
         .then()

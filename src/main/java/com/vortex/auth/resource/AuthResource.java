@@ -1,6 +1,8 @@
 package com.vortex.auth.resource;
 
 import com.vortex.auth.dto.AlterarSenhaRequest;
+import com.vortex.auth.dto.DadosPessoaisExportResponse;
+import com.vortex.auth.dto.LgpdAceiteRequest;
 import com.vortex.auth.dto.AtualizarPerfilRequest;
 import com.vortex.auth.dto.LoginRequest;
 import com.vortex.auth.dto.PrimeiroAcessoRequest;
@@ -190,6 +192,38 @@ public class AuthResource {
       @PathParam("id") Long id) {
     LOG.log(Level.FINE, "Listando histórico de status da ordem do usuário autenticado: {0}", id);
     return ApiResponse.ok(authService.listarHistoricoMinhaOrdemServico(id));
+  }
+
+  @GET
+  @Path("/me/dados-pessoais")
+  @Authenticated
+  @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
+  public ApiResponse<DadosPessoaisExportResponse> exportarDadosPessoais() {
+    LOG.log(Level.FINE, "Exportando dados pessoais do usuário autenticado");
+    return ApiResponse.ok(authService.exportarMeusDadosPessoais());
+  }
+
+  @POST
+  @Path("/me/lgpd-aceite")
+  @Authenticated
+  @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
+  public ApiResponse<UsuarioAutenticadoResponse> registrarLgpdAceite(
+      @Valid LgpdAceiteRequest request) {
+    LOG.log(Level.FINE, "Registrando aceite LGPD do usuário autenticado");
+    return ApiResponse.ok(
+        "Aceite da Política de Privacidade registrado",
+        authService.registrarLgpdAceite(request));
+  }
+
+  @POST
+  @Path("/me/solicitar-exclusao")
+  @Authenticated
+  @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
+  public ApiResponse<UsuarioAutenticadoResponse> solicitarExclusao() {
+    LOG.log(Level.FINE, "Solicitação de exclusão LGPD do usuário autenticado");
+    return ApiResponse.ok(
+        "Solicitação de exclusão registrada. A oficina irá analisar o pedido.",
+        authService.solicitarExclusaoDados());
   }
 
   private Response respostaComToken(String message, TokensGerados tokens) {

@@ -1,6 +1,8 @@
 package com.vortex.ordemservico.service;
 
+import com.vortex.ordemservico.dto.OrdemServicoFiltro;
 import com.vortex.ordemservico.dto.OrdemServicoRequest;
+import com.vortex.ordemservico.dto.OrdemServicoStatusRequest;
 import com.vortex.ordemservico.dto.OrdemServicoResponse;
 import com.vortex.ordemservico.dto.OrdemServicoStatusHistoricoResponse;
 import com.vortex.shared.response.PageResponse;
@@ -10,7 +12,7 @@ public interface OrdemServicoService {
 
   List<OrdemServicoResponse> listarTodos();
 
-  PageResponse<OrdemServicoResponse> listarPaginado(int page, int size);
+  PageResponse<OrdemServicoResponse> listarPaginado(int page, int size, OrdemServicoFiltro filtro);
 
   List<OrdemServicoResponse> listarPorCliente(Long clienteId);
 
@@ -37,6 +39,8 @@ public interface OrdemServicoService {
   OrdemServicoResponse criar(OrdemServicoRequest request);
 
   OrdemServicoResponse atualizar(Long id, OrdemServicoRequest request);
+
+  OrdemServicoResponse alterarStatus(Long id, OrdemServicoStatusRequest request);
 
   void excluir(Long id);
 }

@@ -15,4 +15,9 @@ public interface ClienteService {
   ClienteResponse atualizar(Long id, ClienteRequest request);
 
   void excluir(Long id);
+
+  ClienteResponse anonimizar(Long id);
+
+  List<ClienteResponse> listarSolicitacoesExclusao();
 }
+

@@ -1,6 +1,8 @@
 package com.vortex.auth.service;
 
 import com.vortex.auth.dto.AlterarSenhaRequest;
+import com.vortex.auth.dto.DadosPessoaisExportResponse;
+import com.vortex.auth.dto.LgpdAceiteRequest;
 import com.vortex.auth.dto.AtualizarPerfilRequest;
 import com.vortex.auth.dto.LoginRequest;
 import com.vortex.auth.dto.PrimeiroAcessoRequest;
@@ -42,4 +44,11 @@ public interface AuthService {
   OrdemServicoResponse rejeitarMinhaOrdemServico(Long id);
 
   List<OrdemServicoStatusHistoricoResponse> listarHistoricoMinhaOrdemServico(Long id);
+
+  DadosPessoaisExportResponse exportarMeusDadosPessoais();
+
+  UsuarioAutenticadoResponse registrarLgpdAceite(LgpdAceiteRequest request);
+
+  UsuarioAutenticadoResponse solicitarExclusaoDados();
 }
+

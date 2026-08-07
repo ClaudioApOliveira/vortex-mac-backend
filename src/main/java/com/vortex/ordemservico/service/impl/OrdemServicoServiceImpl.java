@@ -4,7 +4,9 @@ import com.vortex.auth.service.UsuarioAutenticadoProvider;
 import com.vortex.cliente.entity.Cliente;
 import com.vortex.cliente.repository.ClienteRepository;
 import com.vortex.ordemservico.dto.OrdemServicoItemRequest;
+import com.vortex.ordemservico.dto.OrdemServicoFiltro;
 import com.vortex.ordemservico.dto.OrdemServicoRequest;
+import com.vortex.ordemservico.dto.OrdemServicoStatusRequest;
 import com.vortex.ordemservico.dto.OrdemServicoResponse;
 import com.vortex.ordemservico.dto.OrdemServicoStatusHistoricoResponse;
 import com.vortex.ordemservico.entity.OrdemServico;
@@ -16,6 +18,7 @@ import com.vortex.ordemservico.entity.OrdemServicoStatusHistoricoOrigem;
 import com.vortex.ordemservico.repository.OrdemServicoRepository;
 import com.vortex.ordemservico.repository.OrdemServicoStatusHistoricoRepository;
 import com.vortex.ordemservico.service.OrdemServicoService;
+import com.vortex.ordemservico.service.OrdemServicoStatusTransitions;
 import com.vortex.shared.exception.BusinessException;
 import com.vortex.shared.exception.NotFoundException;
 import com.vortex.shared.response.PageResponse;
@@ -25,6 +28,7 @@ import com.vortex.usuario.repository.UsuarioRepository;
 import com.vortex.veiculo.entity.Veiculo;
 import com.vortex.veiculo.repository.VeiculoRepository;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.ws.rs.ForbiddenException;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
@@ -65,15 +69,24 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
 
   @Override
   @Transactional
-  public PageResponse<OrdemServicoResponse> listarPaginado(int page, int size) {
+  public PageResponse<OrdemServicoResponse> listarPaginado(
+      int page, int size, OrdemServicoFiltro filtro) {
     int pagina = normalizarPagina(page);
     int tamanho = normalizarTamanho(size);
+    OrdemServicoFiltro filtroEfetivo =
+        filtro != null
+            ? filtro
+            : new OrdemServicoFiltro(null, null, null, null, null);
 
-    long total = ordemServicoRepository.countAll();
+    long total =
+        filtroEfetivo.temFiltros()
+            ? ordemServicoRepository.countFiltered(filtroEfetivo)
+            : ordemServicoRepository.countAll();
     List<OrdemServicoResponse> content =
-        ordemServicoRepository.findAllPaginated(pagina, tamanho).stream()
-            .map(OrdemServicoResponse::from)
-            .toList();
+        (filtroEfetivo.temFiltros()
+                ? ordemServicoRepository.findFiltered(filtroEfetivo, pagina, tamanho)
+                : ordemServicoRepository.findAllPaginated(pagina, tamanho))
+            .stream().map(OrdemServicoResponse::from).toList();
 
     return PageResponse.of(content, pagina, tamanho, total);
   }
@@ -135,23 +148,18 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
   @Override
   @Transactional
   public OrdemServicoResponse aprovarPorUsuarioCliente(Long usuarioId, Long ordemId) {
-    OrdemServico ordemServico = obterOrdemDoCliente(usuarioId, ordemId);
+    OrdemClienteContexto contexto = obterOrdemDoClienteComUsuario(usuarioId, ordemId);
+    OrdemServico ordemServico = contexto.ordemServico();
     validarOrcamentoPendente(ordemServico);
 
     OrdemServicoStatus statusAnterior = ordemServico.getStatus();
     ordemServico.setStatus(OrdemServicoStatus.APROVADO);
 
-    Usuario usuario =
-        usuarioRepository
-            .findById(usuarioId)
-            .orElseThrow(
-                () -> new NotFoundException("Usuário não encontrado com id: " + usuarioId));
-
     registrarHistoricoStatus(
         ordemServico,
         statusAnterior,
         OrdemServicoStatus.APROVADO,
-        usuario,
+        contexto.usuario(),
         OrdemServicoStatusHistoricoOrigem.CLIENTE,
         "Orçamento aprovado pelo cliente");
 
@@ -161,23 +169,18 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
   @Override
   @Transactional
   public OrdemServicoResponse rejeitarPorUsuarioCliente(Long usuarioId, Long ordemId) {
-    OrdemServico ordemServico = obterOrdemDoCliente(usuarioId, ordemId);
+    OrdemClienteContexto contexto = obterOrdemDoClienteComUsuario(usuarioId, ordemId);
+    OrdemServico ordemServico = contexto.ordemServico();
     validarOrcamentoPendente(ordemServico);
 
     OrdemServicoStatus statusAnterior = ordemServico.getStatus();
     ordemServico.setStatus(OrdemServicoStatus.CANCELADO);
 
-    Usuario usuario =
-        usuarioRepository
-            .findById(usuarioId)
-            .orElseThrow(
-                () -> new NotFoundException("Usuário não encontrado com id: " + usuarioId));
-
     registrarHistoricoStatus(
         ordemServico,
         statusAnterior,
         OrdemServicoStatus.CANCELADO,
-        usuario,
+        contexto.usuario(),
         OrdemServicoStatusHistoricoOrigem.CLIENTE,
         "Orçamento rejeitado pelo cliente");
 
@@ -198,7 +201,9 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
   public List<OrdemServicoStatusHistoricoResponse> listarHistoricoStatusPorUsuarioCliente(
       Long usuarioId, Long ordemId) {
     obterOrdemDoCliente(usuarioId, ordemId);
-    return listarHistoricoStatus(ordemId);
+    return statusHistoricoRepository.findByOrdemServicoIdOrderByCriadoEmDesc(ordemId).stream()
+        .map(OrdemServicoStatusHistoricoResponse::from)
+        .toList();
   }
 
   @Override
@@ -225,10 +230,11 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
   @Transactional
   public OrdemServicoResponse atualizar(Long id, OrdemServicoRequest request) {
     OrdemServico ordemServico = buscarEntidadePorId(id);
+    validarOrdemEditavel(ordemServico);
     OrdemServicoStatus statusAnterior = ordemServico.getStatus();
     Usuario usuario = usuarioAutenticadoProvider.obterUsuarioAutenticadoObrigatorio();
 
-    validarAlteracaoStatusPorPerfil(usuario, statusAnterior, request.status());
+    validarAlteracaoStatus(usuario, statusAnterior, request.status());
 
     ordemServico.getItens().clear();
     aplicarDados(ordemServico, request, true);
@@ -248,8 +254,47 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
 
   @Override
   @Transactional
-  public void excluir(Long id) {
+  public OrdemServicoResponse alterarStatus(Long id, OrdemServicoStatusRequest request) {
     OrdemServico ordemServico = buscarEntidadePorId(id);
+    OrdemServicoStatus statusAnterior = ordemServico.getStatus();
+    Usuario usuario = usuarioAutenticadoProvider.obterUsuarioAutenticadoObrigatorio();
+
+    validarAlteracaoStatus(usuario, statusAnterior, request.status());
+
+    ordemServico.setStatus(request.status());
+    String observacao = request.observacao() != null ? request.observacao().trim() : null;
+    if (observacao != null && observacao.isBlank()) {
+      observacao = null;
+    }
+    if (observacao == null && request.status() == OrdemServicoStatus.ORCAMENTO) {
+      observacao = "Orçamento reaberto para revisão";
+    }
+
+    registrarHistoricoStatus(
+        ordemServico,
+        statusAnterior,
+        ordemServico.getStatus(),
+        usuario,
+        mapearOrigem(usuario),
+        observacao);
+
+    return OrdemServicoResponse.from(ordemServico);
+  }
+
+  @Override
+  @Transactional
+  public void excluir(Long id) {
+    Usuario usuario = usuarioAutenticadoProvider.obterUsuarioAutenticadoObrigatorio();
+    if (usuario.getPerfil() != Perfil.ADMIN) {
+      throw new ForbiddenException("Somente administradores podem excluir ordens de serviço.");
+    }
+
+    OrdemServico ordemServico = buscarEntidadePorId(id);
+    if (ordemServico.getStatus() == OrdemServicoStatus.CONCLUIDO
+        || ordemServico.getStatus() == OrdemServicoStatus.CANCELADO) {
+      throw new BusinessException(
+          "Ordens concluídas ou canceladas não podem ser excluídas.");
+    }
     ordemServicoRepository.delete(ordemServico);
   }
 
@@ -266,15 +311,22 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
   }
 
   private OrdemServico obterOrdemDoCliente(Long usuarioId, Long ordemId) {
-    Long clienteId = obterClienteIdVinculado(usuarioId);
+    return obterOrdemDoClienteComUsuario(usuarioId, ordemId).ordemServico();
+  }
+
+  private OrdemClienteContexto obterOrdemDoClienteComUsuario(Long usuarioId, Long ordemId) {
+    Usuario usuario = buscarUsuarioCliente(usuarioId);
+    Long clienteId = usuario.getCliente().getId();
     OrdemServico ordemServico = buscarEntidadePorId(ordemId);
 
     if (!ordemServico.getCliente().getId().equals(clienteId)) {
       throw new NotFoundException("Ordem de serviço não encontrada com id: " + ordemId);
     }
 
-    return ordemServico;
+    return new OrdemClienteContexto(usuario, ordemServico);
   }
+
+  private record OrdemClienteContexto(Usuario usuario, OrdemServico ordemServico) {}
 
   private void validarOrcamentoPendente(OrdemServico ordemServico) {
     if (ordemServico.getStatus() != OrdemServicoStatus.ORCAMENTO) {
@@ -283,19 +335,43 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
     }
   }
 
-  private void validarAlteracaoStatusPorPerfil(
+  private void validarOrdemEditavel(OrdemServico ordemServico) {
+    if (ordemServico.getStatus() == OrdemServicoStatus.CONCLUIDO) {
+      throw new BusinessException(
+          "Ordem de serviço concluída não pode mais ser alterada.");
+    }
+    if (ordemServico.getStatus() == OrdemServicoStatus.CANCELADO) {
+      throw new BusinessException(
+          "Ordem de serviço cancelada não pode ser editada. Reabra o orçamento para revisar.");
+    }
+  }
+
+  private void validarAlteracaoStatus(
       Usuario usuario, OrdemServicoStatus statusAtual, OrdemServicoStatus statusSolicitado) {
     if (statusSolicitado == null || statusSolicitado == statusAtual) {
       return;
     }
 
-    if (usuario.getPerfil() == Perfil.TECNICO && statusSolicitado == OrdemServicoStatus.APROVADO) {
+    if (!OrdemServicoStatusTransitions.podeTransicionar(statusAtual, statusSolicitado)) {
+      throw new BusinessException(
+          "Transição de status não permitida: "
+              + statusAtual
+              + " → "
+              + statusSolicitado
+              + ".");
+    }
+
+    if (!OrdemServicoStatusTransitions.podeDefinirStatus(usuario.getPerfil(), statusSolicitado)) {
       throw new BusinessException(
           "Somente o cliente, gerente ou administrador pode aprovar orçamentos.");
     }
   }
 
   private Long obterClienteIdVinculado(Long usuarioId) {
+    return buscarUsuarioCliente(usuarioId).getCliente().getId();
+  }
+
+  private Usuario buscarUsuarioCliente(Long usuarioId) {
     Usuario usuario =
         usuarioRepository
             .findById(usuarioId)
@@ -307,7 +383,7 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
           "Histórico de ordens de serviço disponível apenas para usuários com perfil CLIENTE.");
     }
 
-    return usuario.getCliente().getId();
+    return usuario;
   }
 
   private Veiculo buscarVeiculoPorId(Long veiculoId) {
@@ -321,14 +397,14 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
         usuarioRepository
             .findById(tecnicoId)
             .orElseThrow(
-                () -> new NotFoundException("Técnico não encontrado com id: " + tecnicoId));
+                () -> new NotFoundException("Responsável não encontrado com id: " + tecnicoId));
 
     if (!tecnico.isAtivo()) {
-      throw new BusinessException("Técnico inativo: " + tecnico.getNome());
+      throw new BusinessException("Responsável inativo: " + tecnico.getNome());
     }
 
     if (tecnico.getPerfil() == Perfil.CLIENTE) {
-      throw new BusinessException("Usuário informado não é técnico: " + tecnico.getNome());
+      throw new BusinessException("Usuário informado não pode ser responsável pela OS: " + tecnico.getNome());
     }
 
     return tecnico;
@@ -358,18 +434,22 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
         normalizarTexto(request.descricaoServicosTerceirizados()));
     ordemServico.setCustoMaoDeObra(normalizarValor(request.custoMaoDeObra()));
     ordemServico.setDescricaoMaoDeObra(normalizarTexto(request.descricaoMaoDeObra()));
+    ordemServico.setDiagnosticoInicial(normalizarTexto(request.diagnosticoInicial()));
 
     if (permitirStatus && request.status() != null) {
       ordemServico.setStatus(request.status());
     }
 
     for (OrdemServicoItemRequest itemRequest : request.itens()) {
+      if (itemRequest.tipo() != null && itemRequest.tipo() != OrdemServicoItemTipo.PECA) {
+        throw new BusinessException("Itens da ordem de serviço devem ser do tipo peça");
+      }
       OrdemServicoItem item = new OrdemServicoItem();
       item.setOrdemServico(ordemServico);
       item.setDescricao(itemRequest.descricao().trim());
       item.setQuantidade(normalizarValor(itemRequest.quantidade()));
       item.setValorUnitario(normalizarValor(itemRequest.valorUnitario()));
-      item.setTipo(itemRequest.tipo());
+      item.setTipo(OrdemServicoItemTipo.PECA);
       ordemServico.getItens().add(item);
     }
 
@@ -416,9 +496,7 @@ public class OrdemServicoServiceImpl implements OrdemServicoService {
     BigDecimal custoPecas = BigDecimal.ZERO;
 
     for (OrdemServicoItem item : ordemServico.getItens()) {
-      if (item.getTipo() == OrdemServicoItemTipo.PECA) {
-        custoPecas = custoPecas.add(item.getQuantidade().multiply(item.getValorUnitario()));
-      }
+      custoPecas = custoPecas.add(item.getQuantidade().multiply(item.getValorUnitario()));
     }
 
     ordemServico.setCustoPecas(normalizarValor(custoPecas));

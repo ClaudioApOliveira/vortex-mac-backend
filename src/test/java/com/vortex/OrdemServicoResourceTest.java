@@ -39,10 +39,11 @@ class OrdemServicoResourceTest {
         .body("data.clienteId", is((int) clienteId))
         .body("data.veiculoId", is((int) veiculoId))
         .body("data.tecnicoId", is((int) tecnicoId))
-        .body("data.custoPecas", is(45.0f))
+        .body("data.custoPecas", is(165.0f))
         .body("data.custoMaoDeObra", is(120.0f))
-        .body("data.precoTotal", is(215.0f))
+        .body("data.precoTotal", is(335.0f))
         .body("data.status", is("ORCAMENTO"))
+        .body("data.diagnosticoInicial", is("Ruído no motor ao acelerar; verificar correia."))
         .body("data.itens.size()", is(2));
 
     given()
@@ -72,6 +73,7 @@ class OrdemServicoResourceTest {
     body.put("descricaoServicosTerceirizados", "Alinhamento externo");
     body.put("custoMaoDeObra", 120.00);
     body.put("descricaoMaoDeObra", "Troca de óleo e filtros");
+    body.put("diagnosticoInicial", "Ruído no motor ao acelerar; verificar correia.");
     body.put(
         "itens",
         List.of(
@@ -86,13 +88,13 @@ class OrdemServicoResourceTest {
                 "PECA"),
             Map.of(
                 "descricao",
-                "Troca de óleo",
+                "Filtro de ar",
                 "quantidade",
                 1,
                 "valorUnitario",
                 120.00,
                 "tipo",
-                "SERVICO")));
+                "PECA")));
     return body;
   }
 

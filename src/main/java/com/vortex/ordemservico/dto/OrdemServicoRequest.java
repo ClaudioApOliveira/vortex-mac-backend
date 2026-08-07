@@ -15,7 +15,7 @@ import java.util.List;
 public record OrdemServicoRequest(
     @NotNull(message = "Cliente é obrigatório") Long clienteId,
     @NotNull(message = "Veículo é obrigatório") Long veiculoId,
-    @NotNull(message = "Técnico é obrigatório") Long tecnicoId,
+    @NotNull(message = "Responsável é obrigatório") Long tecnicoId,
     @NotNull(message = "Data é obrigatória") LocalDate data,
     @NotNull(message = "Hora é obrigatória") LocalTime hora,
     @Min(value = 0, message = "KM de entrada não pode ser negativa") Integer kmEntrada,
@@ -32,6 +32,8 @@ public record OrdemServicoRequest(
         BigDecimal custoMaoDeObra,
     @Size(max = 500, message = "Descrição da mão de obra deve ter no máximo 500 caracteres")
         String descricaoMaoDeObra,
+    @Size(max = 4000, message = "Diagnóstico deve ter no máximo 4000 caracteres")
+        String diagnosticoInicial,
     OrdemServicoStatus status,
-    @NotEmpty(message = "Informe ao menos um item de peça ou serviço") @Valid
-        List<OrdemServicoItemRequest> itens) {}
+    @NotEmpty(message = "Informe ao menos um item de peça ou serviço")
+        List<@Valid OrdemServicoItemRequest> itens) {}

@@ -74,7 +74,9 @@ class AuthResourceTest {
             Map.of(
                 "email", "nao.existe@test.com",
                 "senha", "senha123",
-                "confirmarSenha", "senha123"))
+                "confirmarSenha", "senha123",
+                "lgpdAceite", true,
+                "lgpdAceiteVersao", "1.0"))
         .when()
         .post("/api/auth/primeiro-acesso")
         .then()
@@ -96,7 +98,9 @@ class AuthResourceTest {
             Map.of(
                 "email", "cliente.primeiro@test.com",
                 "senha", "senha123",
-                "confirmarSenha", "senha123"))
+                "confirmarSenha", "senha123",
+                "lgpdAceite", true,
+                "lgpdAceiteVersao", "1.0"))
         .when()
         .post("/api/auth/primeiro-acesso")
         .then()

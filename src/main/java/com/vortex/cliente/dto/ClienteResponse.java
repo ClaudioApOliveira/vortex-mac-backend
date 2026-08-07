@@ -19,6 +19,8 @@ public record ClienteResponse(
     String telefone,
     Long usuarioId,
     boolean deveDefinirSenha,
+    LocalDateTime lgpdExclusaoSolicitadaEm,
+    LocalDateTime lgpdAnonimizadoEm,
     LocalDateTime createdAt,
     LocalDateTime updatedAt) {
   public static ClienteResponse from(Cliente cliente) {
@@ -26,6 +28,9 @@ public record ClienteResponse(
     Long usuarioId = usuario != null ? usuario.getId() : null;
     String email = usuario != null ? usuario.getEmail() : null;
     boolean deveDefinirSenha = usuario != null && usuario.isDeveDefinirSenha();
+    LocalDateTime exclusao =
+        usuario != null ? usuario.getLgpdExclusaoSolicitadaEm() : null;
+    LocalDateTime anonimizado = usuario != null ? usuario.getLgpdAnonimizadoEm() : null;
 
     return new ClienteResponse(
         cliente.getId(),
@@ -40,6 +45,8 @@ public record ClienteResponse(
         cliente.getTelefone(),
         usuarioId,
         deveDefinirSenha,
+        exclusao,
+        anonimizado,
         cliente.getCriadoEm(),
         cliente.getAtualizadoEm());
   }
